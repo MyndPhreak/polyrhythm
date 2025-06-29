@@ -50,51 +50,41 @@ export function useAudio() {
   /**
    * Initialize the audio context and start Tone.js with proper error handling
    */
-  const startAudioContext = async (): Promise<boolean> => {
-    try {
-      if (!process.client) {
-        console.warn('Audio context can only be started on the client-side');
-        return false;
-      }
+  const startAudioContext = async (): Promise<void> => {
+    if (!process.client) {
+      throw new Error('Audio context can only be started on the client-side');
+    }
 
-      await loadTone();
+    await loadTone();
 
-      console.log('Current audio context state:', Tone.context.state);
+    console.log('Current audio context state:', Tone.context.state);
 
-      if (Tone.context.state === 'running') {
-        isContextStarted.value = true;
-        return true;
-      }
+    if (Tone.context.state === 'running') {
+      isContextStarted.value = true;
+      return;
+    }
 
-      if (Tone.context.state === 'suspended') {
-        console.log('Resuming suspended audio context...');
-        await Tone.context.resume();
-      }
+    if (Tone.context.state === 'suspended') {
+      console.log('Resuming suspended audio context...');
+      await Tone.context.resume();
+    }
 
-      console.log('Starting Tone.js...');
-      await Tone.start();
+    console.log('Starting Tone.js...');
+    await Tone.start();
 
-      // Wait for context to stabilize
-      await new Promise(resolve => setTimeout(resolve, 300));
+    // Wait for context to stabilize
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-      if (Tone.context.state !== 'running') {
-        await Tone.context.resume();
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
+    if (Tone.context.state !== 'running') {
+      await Tone.context.resume();
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
 
-      if (Tone.context.state === 'running') {
-        console.log('Audio context started successfully');
-        isContextStarted.value = true;
-        return true;
-      } else {
-        throw new Error(`Audio context failed to start. State: ${Tone.context.state}`);
-      }
-
-    } catch (err) {
-      const error = err as Error;
-      console.error('Failed to start audio context:', error);
-      handleError(error, 'Audio context startup');
-      return false;
+    if (Tone.context.state === 'running') {
+      console.log('Audio context started successfully');
+      isContextStarted.value = true;
+    } else {
+      throw new Error(`Audio context failed to start. State: ${Tone.context.state}`);
     }
   };
 
@@ -122,55 +112,48 @@ export function useAudio() {
   /**
    * Create audio components with chunked, non-blocking approach
    */
-  const createAudioComponents = async (): Promise<boolean> => {
-    try {
-      console.log('Creating basic synth...');
-      
-      // Use requestAnimationFrame to break up the work
-      await new Promise(resolve => requestAnimationFrame(resolve));
+  const createAudioComponents = async (): Promise<void> => {
+    console.log('Creating basic synth...');
+    
+    // Use requestAnimationFrame to break up the work
+    await new Promise(resolve => requestAnimationFrame(resolve));
 
-      // Create simple synth with minimal configuration
-      synth.value = new Tone.Synth({
-        oscillator: { type: "sine" },
-        envelope: { 
-          attack: 0.1, 
-          decay: 0.2, 
-          sustain: 0.3, 
-          release: 0.4 
-        }
-      });
+    // Create simple synth with minimal configuration
+    synth.value = new Tone.Synth({
+      oscillator: { type: "sine" },
+      envelope: { 
+        attack: 0.1, 
+        decay: 0.2, 
+        sustain: 0.3, 
+        release: 0.4 
+      }
+    });
 
-      console.log('Synth created successfully');
+    console.log('Synth created successfully');
 
-      // Break up work with another frame
-      await new Promise(resolve => requestAnimationFrame(resolve));
+    // Break up work with another frame
+    await new Promise(resolve => requestAnimationFrame(resolve));
 
-      console.log('Creating master volume...');
-      masterVolume.value = new Tone.Volume(-6);
-      console.log('Master volume created successfully');
-
-      return true;
-    } catch (err) {
-      console.error('Error creating audio components:', err);
-      throw err;
-    }
+    console.log('Creating master volume...');
+    masterVolume.value = new Tone.Volume(-6);
+    console.log('Master volume created successfully');
   };
 
   /**
    * Connect audio chain with error handling and proper sequencing
    */
-  const connectAudioChain = async (): Promise<boolean> => {
+  const connectAudioChain = async (): Promise<void> => {
+    console.log('Connecting audio chain...');
+    
+    // Ensure both components exist
+    if (!synth.value || !masterVolume.value) {
+      throw new Error('Audio components not created');
+    }
+
+    // Break up connection work
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
     try {
-      console.log('Connecting audio chain...');
-      
-      // Ensure both components exist
-      if (!synth.value || !masterVolume.value) {
-        throw new Error('Audio components not created');
-      }
-
-      // Break up connection work
-      await new Promise(resolve => requestAnimationFrame(resolve));
-
       // Connect synth to master volume
       synth.value.connect(masterVolume.value);
       console.log('Synth connected to master volume');
@@ -183,24 +166,16 @@ export function useAudio() {
 
       // Wait for connections to stabilize
       await new Promise(resolve => setTimeout(resolve, 100));
-
-      return true;
     } catch (err) {
       console.error('Error connecting audio chain:', err);
       
       // Fallback: direct connection
-      try {
-        console.log('Attempting direct connection...');
-        if (synth.value) {
-          synth.value.toDestination();
-          console.log('Direct connection successful');
-          return true;
-        } else {
-          throw new Error('Synth not available for direct connection');
-        }
-      } catch (fallbackErr) {
-        console.error('Direct connection also failed:', fallbackErr);
-        throw fallbackErr;
+      console.log('Attempting direct connection...');
+      if (synth.value) {
+        synth.value.toDestination();
+        console.log('Direct connection successful');
+      } else {
+        throw new Error('Synth not available for direct connection');
       }
     }
   };
@@ -246,15 +221,14 @@ export function useAudio() {
   /**
    * Initialize the complete audio system with chunked processing
    */
-  const initializeAudioSystem = async (): Promise<boolean> => {
+  const initializeAudioSystem = async (): Promise<void> => {
     if (isInitializing.value) {
-      console.log('Audio system initialization already in progress...');
-      return false;
+      throw new Error('Audio system initialization already in progress...');
     }
 
     // Set up timeout protection
     let timeoutId: number | null = null;
-    const timeoutPromise = new Promise<boolean>((_, reject) => {
+    const timeoutPromise = new Promise<void>((_, reject) => {
       timeoutId = window.setTimeout(() => {
         reject(new Error('Audio system initialization timed out after 10 seconds'));
       }, 10000); // Increased timeout
@@ -266,36 +240,24 @@ export function useAudio() {
 
       // Step 1: Start audio context
       console.log('Step 1: Starting audio context...');
-      const contextStarted = await Promise.race([
+      await Promise.race([
         startAudioContext(),
         timeoutPromise
       ]);
 
-      if (!contextStarted) {
-        throw new Error('Failed to start audio context');
-      }
-
       // Step 2: Create audio components (chunked)
       console.log('Step 2: Creating audio components...');
-      const componentsCreated = await Promise.race([
+      await Promise.race([
         createAudioComponents(),
         timeoutPromise
       ]);
 
-      if (!componentsCreated) {
-        throw new Error('Failed to create audio components');
-      }
-
       // Step 3: Connect audio chain (chunked)
       console.log('Step 3: Connecting audio chain...');
-      const chainConnected = await Promise.race([
+      await Promise.race([
         connectAudioChain(),
         timeoutPromise
       ]);
-
-      if (!chainConnected) {
-        throw new Error('Failed to connect audio chain');
-      }
 
       // Step 4: Apply initial settings from store
       console.log('Step 4: Applying initial settings...');
@@ -303,7 +265,6 @@ export function useAudio() {
 
       console.log('Audio system initialized successfully');
       isInitialized.value = true;
-      return true;
 
     } catch (err) {
       const error = err as Error;
@@ -317,7 +278,7 @@ export function useAudio() {
       isInitialized.value = false;
 
       handleError(error, 'Failed to initialize audio system');
-      return false;
+      throw error; // Re-throw the original error
 
     } finally {
       if (timeoutId !== null) {

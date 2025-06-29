@@ -284,7 +284,7 @@ const startAudio = async () => {
   let hardTimeoutId: number | null = null;
 
   // Create a promise that will reject after a hard timeout
-  const hardTimeoutPromise = new Promise<boolean>((_, reject) => {
+  const hardTimeoutPromise = new Promise<void>((_, reject) => {
     hardTimeoutId = window.setTimeout(() => {
       reject(new Error('Audio initialization force-terminated after 20 seconds to prevent browser freezing'));
     }, 20000); // 20 second hard timeout
@@ -322,14 +322,10 @@ const startAudio = async () => {
 
     // Start the initialization with a race against the hard timeout
     initializationStep.value = 'Initializing synth...';
-    const success = await Promise.race([
+    await Promise.race([
       initializeAudioSystem(),
       hardTimeoutPromise
     ]);
-
-    if (!success) {
-      throw new Error('Audio system initialization failed');
-    }
 
     initializationStep.value = 'Complete!';
 
