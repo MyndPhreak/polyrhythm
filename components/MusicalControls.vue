@@ -9,12 +9,29 @@
         <span>Musical Controls</span>
       </h2>
       <div class="flex items-center space-x-2">
+        <div 
+          class="w-2 h-2 rounded-full transition-colors duration-200"
+          :class="isInitialized ? 'bg-success-400 animate-pulse' : 'bg-warning-400'"
+        ></div>
+        <span class="text-xs text-secondary-400">
+          {{ isInitialized ? 'Audio Ready' : 'Audio Not Ready' }}
+        </span>
         <button
           @click="showAdvanced = !showAdvanced"
           class="px-3 py-1 text-xs bg-secondary-600 hover:bg-secondary-500 text-white rounded-lg transition-colors duration-200"
         >
           {{ showAdvanced ? 'Simple' : 'Advanced' }}
         </button>
+      </div>
+    </div>
+
+    <!-- Audio System Warning -->
+    <div v-if="!isInitialized" class="p-4 bg-warning-500/10 border border-warning-500/20 rounded-xl">
+      <div class="flex items-center space-x-3">
+        <ExclamationTriangleIcon class="w-5 h-5 text-warning-400 flex-shrink-0" />
+        <div class="text-warning-200 text-sm">
+          Audio system not initialized. Please start the audio system in the Audio Controls V3 panel first.
+        </div>
       </div>
     </div>
 
@@ -83,6 +100,25 @@
           </span>
         </div>
       </div>
+    </div>
+
+    <!-- Test Tone -->
+    <div class="space-y-3">
+      <h3 class="text-lg font-medium text-white">Test Tone</h3>
+      <button
+        @click="playTestTone"
+        :disabled="!isInitialized"
+        class="w-full px-4 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-secondary-600 disabled:cursor-not-allowed text-white rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-medium hover:shadow-strong transform hover:scale-105 disabled:hover:scale-100"
+      >
+        <span v-if="isInitialized" class="flex items-center justify-center space-x-2">
+          <MusicalNoteIcon class="w-4 h-4" />
+          <span>Play Test Tone ({{ localSettings.rootNote }}4)</span>
+        </span>
+        <span v-else class="flex items-center justify-center space-x-2">
+          <ExclamationTriangleIcon class="w-4 h-4" />
+          <span>Audio Not Ready</span>
+        </span>
+      </button>
     </div>
 
     <!-- Global Settings -->
@@ -160,7 +196,8 @@
         <h3 class="text-lg font-medium text-white">Individual Nodes</h3>
         <button
           @click="testAllNodes"
-          class="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded-lg transition-colors duration-200"
+          :disabled="!isInitialized"
+          class="px-3 py-1 bg-primary-600 hover:bg-primary-700 disabled:bg-secondary-600 disabled:cursor-not-allowed text-white text-xs rounded-lg transition-colors duration-200"
         >
           Test All
         </button>
@@ -185,7 +222,8 @@
             </div>
             <button
               @click="triggerNodeNote(index)"
-              class="px-2 py-1 bg-primary-600/20 hover:bg-primary-600/40 text-primary-300 text-xs rounded transition-colors duration-200"
+              :disabled="!isInitialized"
+              class="px-2 py-1 bg-primary-600/20 hover:bg-primary-600/40 disabled:bg-secondary-600/20 disabled:cursor-not-allowed text-primary-300 disabled:text-secondary-500 text-xs rounded transition-colors duration-200"
             >
               Test
             </button>
@@ -285,7 +323,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue';
-import { MusicalNoteIcon } from '@heroicons/vue/24/outline';
+import { MusicalNoteIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline';
 import { useMusicalAudio, type MusicalAudioSettings, type ScaleType } from '~/composables/useMusicalAudio';
 import { debounce } from '~/utils/debounce';
 
@@ -305,7 +343,9 @@ const {
   getNodeDisplayNote,
   getNodeFrequency,
   exportConfiguration,
-  importConfiguration
+  importConfiguration,
+  noteToFrequency,
+  isInitialized
 } = useMusicalAudio();
 
 // Local state
@@ -342,9 +382,31 @@ const formatScaleName = (scale: ScaleType): string => {
 };
 
 /**
+ * Play a test tone using the root note
+ */
+const playTestTone = () => {
+  if (!isInitialized.value) {
+    console.warn('Audio system not initialized');
+    return;
+  }
+  
+  try {
+    const frequency = noteToFrequency(localSettings.rootNote, 4);
+    triggerNodeNote(0, 0.8); // Use the first node's configuration but with root note
+  } catch (error) {
+    console.error('Failed to play test tone:', error);
+  }
+};
+
+/**
  * Test all enabled nodes
  */
 const testAllNodes = () => {
+  if (!isInitialized.value) {
+    console.warn('Audio system not initialized');
+    return;
+  }
+  
   nodeConfigs.value.forEach((config, index) => {
     if (config.enabled) {
       setTimeout(() => triggerNodeNote(index), index * 100);
