@@ -75,15 +75,15 @@ class DirectWebAudioProvider implements SimpleAudioProvider {
     }
   }
 
-  async playNote(frequency: number, duration: number = 0.2): Promise<void> {
+  playNote(frequency: number, duration: number = 0.2): void {
     if (!this.ready || !this.context || !this.masterGain) {
       console.warn('DirectWebAudio not ready for playback');
       return;
     }
     
-    // Always ensure context is running before playing
-    if (!(await this.ensureContextRunning())) {
-      console.warn('DirectWebAudio context not available for playback');
+    // Check context state synchronously
+    if (this.context.state !== 'running') {
+      console.warn('DirectWebAudio context not running');
       return;
     }
     
@@ -95,7 +95,7 @@ class DirectWebAudioProvider implements SimpleAudioProvider {
       oscillator.type = 'sine';
       oscillator.frequency.value = frequency;
       
-      // Simple envelope
+      // Simple envelope with proper timing
       const now = this.context.currentTime;
       envelope.gain.setValueAtTime(0, now);
       envelope.gain.linearRampToValueAtTime(0.3, now + 0.01);
@@ -148,12 +148,14 @@ class DirectWebAudioProvider implements SimpleAudioProvider {
   }
 }
 
-// Improved Tone.js Provider with better context management
+// Improved Tone.js Provider with proper timing management
 class ImprovedToneProvider implements SimpleAudioProvider {
   name = 'ImprovedTone';
   private synth: any = null;
   private Tone: any = null;
   private ready = false;
+  private lastPlayTime = 0;
+  private minInterval = 50; // Minimum 50ms between notes
 
   async initialize(): Promise<boolean> {
     try {
@@ -235,64 +237,41 @@ class ImprovedToneProvider implements SimpleAudioProvider {
     }
   }
 
-  async playNote(frequency: number, duration: number = 0.2): Promise<void> {
+  playNote(frequency: number, duration: number = 0.2): void {
     if (!this.ready || !this.synth || !this.Tone) {
       console.warn('ImprovedTone not ready for playback');
       return;
     }
     
-    // Always ensure context is running before playing
-    if (!(await this.ensureContextRunning())) {
-      console.warn('Tone.js context not available for playback');
+    // Check context state synchronously
+    if (this.Tone.context.state !== 'running') {
+      console.warn('Tone.js context not running');
       return;
     }
+    
+    // Implement timing throttle to prevent overlapping notes
+    const now = Date.now();
+    if (now - this.lastPlayTime < this.minInterval) {
+      console.log('Skipping note due to timing throttle');
+      return;
+    }
+    this.lastPlayTime = now;
     
     try {
       // Double-check synth is still valid
       if (!this.synth || typeof this.synth.triggerAttackRelease !== 'function') {
-        console.warn('Tone.js synth is invalid, attempting to recreate...');
-        await this.recreateSynth();
-        if (!this.synth) {
-          console.warn('Failed to recreate Tone.js synth');
-          return;
-        }
+        console.warn('Tone.js synth is invalid, skipping note');
+        return;
       }
       
+      // Use immediate timing to avoid scheduling conflicts
       this.synth.triggerAttackRelease(frequency, duration);
       console.log(`ImprovedTone played: ${frequency}Hz for ${duration}s`);
     } catch (error) {
       console.warn('Failed to play note with Tone.js:', error);
       
-      // Try to recreate synth on error
-      try {
-        await this.recreateSynth();
-        if (this.synth) {
-          this.synth.triggerAttackRelease(frequency, duration);
-          console.log('Successfully played note after synth recreation');
-        }
-      } catch (retryError) {
-        console.warn('Failed to play note even after synth recreation:', retryError);
-      }
-    }
-  }
-
-  private async recreateSynth(): Promise<void> {
-    try {
-      if (this.synth) {
-        this.synth.dispose();
-        this.synth = null;
-      }
-      
-      if (await this.ensureContextRunning()) {
-        this.synth = new this.Tone.Synth({
-          oscillator: { type: 'sine' },
-          envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.2 }
-        });
-        this.synth.toDestination();
-        console.log('Tone.js synth recreated successfully');
-      }
-    } catch (error) {
-      console.warn('Failed to recreate Tone.js synth:', error);
+      // Don't try to recreate synth during playback - just log the error
+      // Synth recreation should happen during initialization only
     }
   }
 
@@ -375,10 +354,10 @@ const noteToFrequency = (note: string): number => {
 export function useAudioV3() {
   const { handleError } = useErrorHandler();
 
-  // Available providers in order of preference
+  // Available providers in order of preference (DirectWebAudio first for reliability)
   const providers: SimpleAudioProvider[] = [
-    new ImprovedToneProvider(),
     new DirectWebAudioProvider(),
+    new ImprovedToneProvider(),
     new SilentProvider()
   ];
 
@@ -446,19 +425,16 @@ export function useAudioV3() {
   /**
    * Play a note by name or frequency with improved error handling
    */
-  const triggerNote = async (note: string | number, duration: string = "8n", velocity: number = 0.8): Promise<void> => {
+  const triggerNote = (note: string | number, duration: string = "8n", velocity: number = 0.8): void => {
     if (!activeProvider.value) {
       console.warn('No audio provider available');
       return;
     }
     
-    // Ensure provider is ready before playing
+    // Check if provider is ready synchronously
     if (!activeProvider.value.isReady()) {
-      console.warn('Audio provider not ready, attempting to ensure context is running...');
-      if (!(await activeProvider.value.ensureContextRunning())) {
-        console.warn('Failed to ensure audio context is running');
-        return;
-      }
+      console.warn('Audio provider not ready');
+      return;
     }
     
     try {
@@ -466,17 +442,9 @@ export function useAudioV3() {
       const durationSeconds = duration === "8n" ? 0.2 : duration === "16n" ? 0.1 : 0.2;
       
       console.log(`Playing note: ${note} (${frequency}Hz) for ${durationSeconds}s`);
-      await activeProvider.value.playNote(frequency, durationSeconds);
+      activeProvider.value.playNote(frequency, durationSeconds);
     } catch (error) {
       console.warn('Failed to trigger note:', error);
-      
-      // Try to restart the provider if it fails
-      try {
-        console.log('Attempting to restart audio provider...');
-        await restartAudioSystem();
-      } catch (restartError) {
-        console.warn('Failed to restart audio system:', restartError);
-      }
     }
   };
 
