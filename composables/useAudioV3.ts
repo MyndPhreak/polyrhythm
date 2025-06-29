@@ -29,12 +29,27 @@ class DirectWebAudioProvider implements SimpleAudioProvider {
         await this.context.resume();
       }
       
+      // Wait for context to be running
+      let attempts = 0;
+      while (this.context.state !== 'running' && attempts < 10) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (this.context.state === 'suspended') {
+          await this.context.resume();
+        }
+        attempts++;
+      }
+      
+      if (this.context.state !== 'running') {
+        throw new Error(`Audio context failed to start. State: ${this.context.state}`);
+      }
+      
       // Create master gain node
       this.masterGain = this.context.createGain();
       this.masterGain.connect(this.context.destination);
       this.masterGain.gain.value = 0.3; // Safe default volume
       
       this.ready = true;
+      console.log('DirectWebAudio provider initialized successfully');
       return true;
     } catch (error) {
       console.warn('DirectWebAudio failed:', error);
@@ -44,7 +59,30 @@ class DirectWebAudioProvider implements SimpleAudioProvider {
   }
 
   playNote(frequency: number, duration: number = 0.2): void {
-    if (!this.ready || !this.context || !this.masterGain) return;
+    if (!this.ready || !this.context || !this.masterGain) {
+      console.warn('DirectWebAudio not ready for playback');
+      return;
+    }
+    
+    // Check context state before playing
+    if (this.context.state !== 'running') {
+      console.warn('Audio context not running, attempting to resume...');
+      this.context.resume().then(() => {
+        // Retry playing the note after resuming
+        if (this.context?.state === 'running') {
+          this.playNoteInternal(frequency, duration);
+        }
+      }).catch(err => {
+        console.warn('Failed to resume audio context:', err);
+      });
+      return;
+    }
+    
+    this.playNoteInternal(frequency, duration);
+  }
+
+  private playNoteInternal(frequency: number, duration: number): void {
+    if (!this.context || !this.masterGain) return;
     
     try {
       const oscillator = this.context.createOscillator();
@@ -68,23 +106,23 @@ class DirectWebAudioProvider implements SimpleAudioProvider {
       oscillator.stop(now + duration);
       
     } catch (error) {
-      console.warn('Failed to play note:', error);
+      console.warn('Failed to play note internally:', error);
     }
   }
 
   setVolume(volume: number): void {
-    if (!this.ready || !this.masterGain) return;
+    if (!this.ready || !this.masterGain || !this.context) return;
     
     try {
       const clampedVolume = Math.max(0, Math.min(1, volume));
-      this.masterGain.gain.setTargetAtTime(clampedVolume * 0.3, this.context!.currentTime, 0.1);
+      this.masterGain.gain.setTargetAtTime(clampedVolume * 0.3, this.context.currentTime, 0.1);
     } catch (error) {
       console.warn('Failed to set volume:', error);
     }
   }
 
   isReady(): boolean {
-    return this.ready;
+    return this.ready && this.context?.state === 'running';
   }
 
   dispose(): void {
@@ -128,6 +166,20 @@ class MinimalToneProvider implements SimpleAudioProvider {
         await this.Tone.start();
       }
       
+      // Wait for context to be running
+      let attempts = 0;
+      while (this.Tone.context.state !== 'running' && attempts < 10) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (this.Tone.context.state === 'suspended') {
+          await this.Tone.context.resume();
+        }
+        attempts++;
+      }
+      
+      if (this.Tone.context.state !== 'running') {
+        throw new Error(`Tone.js context failed to start. State: ${this.Tone.context.state}`);
+      }
+      
       // Create minimal synth
       this.synth = new this.Tone.Synth({
         oscillator: { type: 'sine' },
@@ -135,6 +187,7 @@ class MinimalToneProvider implements SimpleAudioProvider {
       }).toDestination();
       
       this.ready = true;
+      console.log('MinimalTone provider initialized successfully');
       return true;
     } catch (error) {
       console.warn('MinimalTone failed:', error);
@@ -144,17 +197,40 @@ class MinimalToneProvider implements SimpleAudioProvider {
   }
 
   playNote(frequency: number, duration: number = 0.2): void {
-    if (!this.ready || !this.synth) return;
+    if (!this.ready || !this.synth || !this.Tone) {
+      console.warn('MinimalTone not ready for playback');
+      return;
+    }
+    
+    // Check context state before playing
+    if (this.Tone.context.state !== 'running') {
+      console.warn('Tone.js context not running, attempting to resume...');
+      this.Tone.context.resume().then(() => {
+        // Retry playing the note after resuming
+        if (this.Tone.context.state === 'running') {
+          this.playNoteInternal(frequency, duration);
+        }
+      }).catch((err: any) => {
+        console.warn('Failed to resume Tone.js context:', err);
+      });
+      return;
+    }
+    
+    this.playNoteInternal(frequency, duration);
+  }
+
+  private playNoteInternal(frequency: number, duration: number): void {
+    if (!this.synth) return;
     
     try {
       this.synth.triggerAttackRelease(frequency, duration);
     } catch (error) {
-      console.warn('Failed to play note:', error);
+      console.warn('Failed to play note with Tone.js:', error);
     }
   }
 
   setVolume(volume: number): void {
-    if (!this.ready || !this.synth) return;
+    if (!this.ready || !this.synth || !this.Tone) return;
     
     try {
       const clampedVolume = Math.max(0, Math.min(1, volume));
@@ -165,7 +241,7 @@ class MinimalToneProvider implements SimpleAudioProvider {
   }
 
   isReady(): boolean {
-    return this.ready;
+    return this.ready && this.Tone?.context?.state === 'running';
   }
 
   dispose(): void {
@@ -189,15 +265,18 @@ class SilentProvider implements SimpleAudioProvider {
 
   async initialize(): Promise<boolean> {
     this.ready = true;
+    console.log('Silent provider initialized (no audio output)');
     return true;
   }
 
   playNote(frequency: number, duration?: number): void {
     // Silent - no audio output
+    console.log(`Silent provider: would play ${frequency}Hz for ${duration}s`);
   }
 
   setVolume(volume: number): void {
     // Silent - no audio output
+    console.log(`Silent provider: would set volume to ${volume}`);
   }
 
   isReady(): boolean {
@@ -259,7 +338,7 @@ export function useAudioV3() {
         try {
           const initPromise = provider.initialize();
           const timeoutPromise = new Promise<boolean>((_, reject) => 
-            setTimeout(() => reject(new Error('Provider timeout')), 2000)
+            setTimeout(() => reject(new Error('Provider timeout')), 3000)
           );
           
           const success = await Promise.race([initPromise, timeoutPromise]);
@@ -297,12 +376,16 @@ export function useAudioV3() {
    * Play a note by name or frequency
    */
   const triggerNote = (note: string | number, duration: string = "8n", velocity: number = 0.8): void => {
-    if (!activeProvider.value?.isReady()) return;
+    if (!activeProvider.value?.isReady()) {
+      console.warn('Audio provider not ready for playback');
+      return;
+    }
     
     try {
       const frequency = typeof note === 'string' ? noteToFrequency(note) : note;
       const durationSeconds = duration === "8n" ? 0.2 : duration === "16n" ? 0.1 : 0.2;
       
+      console.log(`Playing note: ${note} (${frequency}Hz) for ${durationSeconds}s`);
       activeProvider.value.playNote(frequency, durationSeconds);
     } catch (error) {
       console.warn('Failed to trigger note:', error);
