@@ -157,22 +157,32 @@ export function useAudio() {
   };
 
   /**
-   * Connect audio chain with error handling
+   * Connect audio chain with error handling and proper sequencing
    */
   const connectAudioChain = async (): Promise<boolean> => {
     try {
       console.log('Connecting audio chain...');
       
+      // Ensure both components exist
+      if (!synth.value || !masterVolume.value) {
+        throw new Error('Audio components not created');
+      }
+
       // Break up connection work
       await new Promise(resolve => requestAnimationFrame(resolve));
 
+      // Connect synth to master volume
       synth.value.connect(masterVolume.value);
       console.log('Synth connected to master volume');
 
       await new Promise(resolve => requestAnimationFrame(resolve));
 
+      // Connect master volume to destination
       masterVolume.value.toDestination();
       console.log('Master volume connected to destination');
+
+      // Wait for connections to stabilize
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       return true;
     } catch (err) {
@@ -181,13 +191,55 @@ export function useAudio() {
       // Fallback: direct connection
       try {
         console.log('Attempting direct connection...');
-        synth.value.toDestination();
-        console.log('Direct connection successful');
-        return true;
+        if (synth.value) {
+          synth.value.toDestination();
+          console.log('Direct connection successful');
+          return true;
+        } else {
+          throw new Error('Synth not available for direct connection');
+        }
       } catch (fallbackErr) {
         console.error('Direct connection also failed:', fallbackErr);
         throw fallbackErr;
       }
+    }
+  };
+
+  /**
+   * Apply initial settings from store to audio components
+   */
+  const applyInitialSettings = async (): Promise<void> => {
+    try {
+      console.log('Applying initial audio settings...');
+      
+      // Get audio store if available
+      let audioStore = null;
+      try {
+        const { useAudioStore } = await import('~/stores/audioStore');
+        audioStore = useAudioStore();
+      } catch (err) {
+        console.log('Audio store not available, using defaults');
+      }
+
+      // Apply master volume
+      if (audioStore?.masterVolume !== undefined) {
+        setVolume(audioStore.masterVolume);
+        console.log('Applied master volume from store:', audioStore.masterVolume);
+      } else {
+        setVolume(AUDIO_CONSTANTS.DEFAULT_MASTER_VOLUME);
+        console.log('Applied default master volume');
+      }
+
+      // Apply synth settings
+      if (audioStore?.synthSettings) {
+        updateSynthParams(audioStore.synthSettings);
+        console.log('Applied synth settings from store');
+      }
+
+      console.log('Initial settings applied successfully');
+    } catch (err) {
+      console.warn('Error applying initial settings:', err);
+      // Don't throw - this is not critical for basic functionality
     }
   };
 
@@ -204,8 +256,8 @@ export function useAudio() {
     let timeoutId: number | null = null;
     const timeoutPromise = new Promise<boolean>((_, reject) => {
       timeoutId = window.setTimeout(() => {
-        reject(new Error('Audio system initialization timed out after 5 seconds'));
-      }, 5000);
+        reject(new Error('Audio system initialization timed out after 10 seconds'));
+      }, 10000); // Increased timeout
     });
 
     try {
@@ -244,6 +296,10 @@ export function useAudio() {
       if (!chainConnected) {
         throw new Error('Failed to connect audio chain');
       }
+
+      // Step 4: Apply initial settings from store
+      console.log('Step 4: Applying initial settings...');
+      await applyInitialSettings();
 
       console.log('Audio system initialized successfully');
       isInitialized.value = true;
@@ -350,10 +406,14 @@ export function useAudio() {
     console.log('Delay is disabled in simplified audio system');
   };
 
+  /**
+   * Update synth parameters with proper oscillator type handling
+   */
   const updateSynthParams = (params: any): void => {
     try {
       if (!process.client || !synth.value) return;
 
+      // Handle envelope parameters
       const envelopeParams: any = {};
       if (params.attack !== undefined) envelopeParams.attack = params.attack;
       if (params.decay !== undefined) envelopeParams.decay = params.decay;
@@ -363,6 +423,12 @@ export function useAudio() {
       if (Object.keys(envelopeParams).length > 0) {
         synth.value.envelope.set(envelopeParams);
       }
+
+      // Handle oscillator type
+      if (params.oscillatorType !== undefined) {
+        synth.value.oscillator.type = params.oscillatorType;
+      }
+
     } catch (err) {
       console.warn('Failed to update synth parameters:', err);
     }
