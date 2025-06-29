@@ -5,6 +5,7 @@
       class="w-full h-full bg-gradient-to-br from-secondary-800/50 to-secondary-900/50 rounded-xl cursor-crosshair border border-white/10 shadow-soft backdrop-blur-sm transition-all duration-300 group-hover:shadow-medium"
       @mousemove="handleMouseMove"
       @mouseleave="handleMouseLeave"
+      @click="handleCanvasClick"
       :aria-label="`Musical rhythm visualizer with ${rhythmStore.nodeCount} nodes`"
       role="img"
     />
@@ -40,6 +41,9 @@
           </div>
           <div class="text-secondary-300 text-xs">
             Volume: <span class="text-info-400 font-mono">{{ (getNodeVolume(hoveredNode) * 100).toFixed(0) }}%</span>
+          </div>
+          <div class="text-secondary-300 text-xs">
+            Status: <span :class="getNodeStatusClass(hoveredNode)">{{ getNodeStatus(hoveredNode) }}</span>
           </div>
         </div>
         <!-- Tooltip arrow -->
@@ -117,6 +121,9 @@
       <div class="text-xs text-secondary-400 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/10">
         <div>Scale: <span class="text-primary-400">{{ currentScaleInfo }}</span></div>
         <div>Nodes: <span class="text-accent-400">{{ nodeCount }}</span></div>
+        <div>Audio: <span :class="audioInitialized ? 'text-success-400' : 'text-warning-400'">
+          {{ audioInitialized ? 'Ready' : 'Not Ready' }}
+        </span></div>
       </div>
     </div>
 
@@ -125,7 +132,7 @@
       v-if="hoveredNode !== null"
       class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-xs text-secondary-400 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/10"
     >
-      Click to test note
+      Click to test note • {{ audioInitialized ? 'Audio Ready' : 'Audio Not Ready' }}
     </div>
   </div>
 </template>
@@ -190,6 +197,30 @@ const nodeSpeed = (index: number): number => {
  */
 const getNodeVolume = (index: number): number => {
   return nodeConfigs.value[index]?.volume || 1.0;
+};
+
+/**
+ * Get node status for tooltip
+ */
+const getNodeStatus = (index: number): string => {
+  const config = nodeConfigs.value[index];
+  if (!config) return 'Not configured';
+  if (!config.enabled) return 'Disabled';
+  if (!audioInitialized.value) return 'Audio not ready';
+  return 'Ready';
+};
+
+/**
+ * Get node status class for tooltip
+ */
+const getNodeStatusClass = (index: number): string => {
+  const status = getNodeStatus(index);
+  switch (status) {
+    case 'Ready': return 'text-success-400';
+    case 'Disabled': return 'text-warning-400';
+    case 'Audio not ready': return 'text-warning-400';
+    default: return 'text-error-400';
+  }
 };
 
 /**
@@ -281,6 +312,39 @@ const stopAnimation = () => {
 };
 
 /**
+ * Trigger musical note with enhanced logging and error handling
+ */
+const triggerMusicalNote = (nodeIndex: number, velocity: number = 0.8) => {
+  console.log(`Visualizer: Attempting to trigger note for node ${nodeIndex}`);
+  console.log(`Audio initialized: ${audioInitialized.value}`);
+  console.log(`Node config:`, nodeConfigs.value[nodeIndex]);
+  
+  if (!audioInitialized.value) {
+    console.warn(`Visualizer: Audio system not initialized, cannot play note for node ${nodeIndex}`);
+    return;
+  }
+  
+  const config = nodeConfigs.value[nodeIndex];
+  if (!config) {
+    console.warn(`Visualizer: No configuration found for node ${nodeIndex}`);
+    return;
+  }
+  
+  if (!config.enabled) {
+    console.log(`Visualizer: Node ${nodeIndex} is disabled, skipping`);
+    return;
+  }
+  
+  try {
+    console.log(`Visualizer: Triggering note ${config.note}${config.octave} for node ${nodeIndex}`);
+    triggerNodeNote(nodeIndex, velocity);
+    console.log(`Visualizer: Successfully triggered note for node ${nodeIndex}`);
+  } catch (err) {
+    console.error(`Visualizer: Failed to trigger note for node ${nodeIndex}:`, err);
+  }
+};
+
+/**
  * Main animation loop with musical audio integration
  */
 const animate = (timestamp: number) => {
@@ -310,14 +374,7 @@ const animate = (timestamp: number) => {
       hasChanges = true;
 
       // Trigger musical note for top boundary hit
-      if (audioInitialized.value) {
-        try {
-          triggerNodeNote(i, 0.8);
-        } catch (err) {
-          // Silently handle audio errors to prevent visualization from breaking
-          console.warn('Failed to trigger musical note:', err);
-        }
-      }
+      triggerMusicalNote(i, 0.8);
 
       // Emit hit event for top boundary
       emit('node-hit', { 
@@ -334,14 +391,7 @@ const animate = (timestamp: number) => {
       hasChanges = true;
 
       // Trigger musical note for bottom boundary hit
-      if (audioInitialized.value) {
-        try {
-          triggerNodeNote(i, 0.6);
-        } catch (err) {
-          // Silently handle audio errors to prevent visualization from breaking
-          console.warn('Failed to trigger musical note:', err);
-        }
-      }
+      triggerMusicalNote(i, 0.6);
 
       // Emit hit event for bottom boundary
       emit('node-hit', { 
@@ -419,14 +469,20 @@ const drawNodes = () => {
     ctx.lineTo(x, canvas.height);
     ctx.stroke();
 
-    // Skip disabled nodes
-    if (nodeConfig && !nodeConfig.enabled) {
-      continue;
-    }
-
     // Draw node with enhanced visuals
     const isHovered = i === hoveredNode.value;
     const isActive = Math.abs(node.velocity) > 0.5;
+    const isEnabled = nodeConfig?.enabled !== false;
+
+    // Skip visual effects for disabled nodes
+    if (!isEnabled) {
+      // Draw disabled node
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(100, 100, 100, 0.3)';
+      ctx.arc(x, y, CANVAS_CONSTANTS.NODE_RADIUS * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
 
     // Outer glow for active nodes
     if (isActive || isHovered) {
@@ -472,6 +528,12 @@ const drawNodes = () => {
       ctx.arc(x, y, CANVAS_CONSTANTS.NODE_RADIUS * nodeConfig.volume * 0.6, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    // Audio status indicator (small dot)
+    ctx.beginPath();
+    ctx.fillStyle = audioInitialized.value ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)';
+    ctx.arc(x + CANVAS_CONSTANTS.NODE_RADIUS - 3, y - CANVAS_CONSTANTS.NODE_RADIUS + 3, 2, 0, Math.PI * 2);
+    ctx.fill();
 
     // Note label
     if (nodeConfig && isHovered) {
@@ -533,7 +595,8 @@ const handleMouseLeave = () => {
  */
 const handleCanvasClick = (event: MouseEvent) => {
   if (hoveredNode.value !== null) {
-    triggerNodeNote(hoveredNode.value, 0.8);
+    console.log(`Canvas clicked on node ${hoveredNode.value}`);
+    triggerMusicalNote(hoveredNode.value, 0.8);
   }
 };
 
@@ -578,7 +641,7 @@ watch([settings, nodeConfigs], () => {
 // Watch for reset events from the rhythm store
 watch(() => rhythmStore.currentTime, (newTime, oldTime) => {
   // Detect reset when currentTime goes from positive to 0
-  if (oldTime > 0 && newTime === 0) {
+  if (oldValue > 0 && newTime === 0) {
     resetNodes();
     if (!rhythmStore.isPlaying) {
       drawNodes();
@@ -586,20 +649,21 @@ watch(() => rhythmStore.currentTime, (newTime, oldTime) => {
   }
 });
 
-// Add click event listener
+// Watch for audio initialization changes
+watch(audioInitialized, (newValue) => {
+  console.log(`Visualizer: Audio initialized changed to ${newValue}`);
+  isDirty.value = true;
+  if (!rhythmStore.isPlaying) {
+    drawNodes();
+  }
+}, { immediate: true });
+
+// Initialize
 onMounted(() => {
   initializeVisualization();
-  
-  if (canvasRef.value) {
-    canvasRef.value.addEventListener('click', handleCanvasClick);
-  }
 });
 
 onUnmounted(() => {
   stopAnimation();
-  
-  if (canvasRef.value) {
-    canvasRef.value.removeEventListener('click', handleCanvasClick);
-  }
 });
 </script>

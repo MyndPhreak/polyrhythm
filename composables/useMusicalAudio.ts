@@ -48,7 +48,7 @@ export interface MusicalAudioSettings {
 export function useMusicalAudio() {
   const { handleError } = useErrorHandler();
   
-  // Get the V3 audio system instance - this is the key fix
+  // Get the V3 audio system instance
   const audioV3 = useAudioV3();
 
   // Musical settings
@@ -95,6 +95,8 @@ export function useMusicalAudio() {
     if (settings.value.autoAssignScale) {
       assignScale(settings.value.scaleType, settings.value.rootNote);
     }
+    
+    console.log(`Musical audio: Initialized ${count} nodes`);
   };
 
   /**
@@ -167,7 +169,7 @@ export function useMusicalAudio() {
       nodeConfigs.value[i].octave = minOctave + octaveOffset;
     }
     
-    console.log(`Assigned ${scaleType} scale in ${rootNote} to ${nodeConfigs.value.length} nodes`);
+    console.log(`Musical audio: Assigned ${scaleType} scale in ${rootNote} to ${nodeConfigs.value.length} nodes`);
   };
 
   /**
@@ -184,7 +186,7 @@ export function useMusicalAudio() {
       nodeConfigs.value[nodeIndex].octave = octave;
     }
     
-    console.log(`Set node ${nodeIndex} to ${note}${nodeConfigs.value[nodeIndex].octave}`);
+    console.log(`Musical audio: Set node ${nodeIndex} to ${note}${nodeConfigs.value[nodeIndex].octave}`);
   };
 
   /**
@@ -223,26 +225,34 @@ export function useMusicalAudio() {
     }
     
     nodeConfigs.value[nodeIndex].enabled = !nodeConfigs.value[nodeIndex].enabled;
+    console.log(`Musical audio: Node ${nodeIndex} ${nodeConfigs.value[nodeIndex].enabled ? 'enabled' : 'disabled'}`);
   };
 
   /**
-   * Trigger note for specific node with proper error handling
+   * Trigger note for specific node with enhanced error handling and logging
    */
   const triggerNodeNote = (nodeIndex: number, velocity: number = 0.8) => {
+    console.log(`Musical audio: triggerNodeNote called for node ${nodeIndex}, velocity ${velocity}`);
+    
     if (nodeIndex < 0 || nodeIndex >= nodeConfigs.value.length) {
-      console.warn(`Invalid node index: ${nodeIndex}`);
+      console.warn(`Musical audio: Invalid node index: ${nodeIndex}`);
       return;
     }
     
     const config = nodeConfigs.value[nodeIndex];
+    if (!config) {
+      console.warn(`Musical audio: No config found for node ${nodeIndex}`);
+      return;
+    }
+    
     if (!config.enabled) {
-      console.log(`Node ${nodeIndex} is disabled, skipping`);
+      console.log(`Musical audio: Node ${nodeIndex} is disabled, skipping`);
       return;
     }
     
     // Check if audio system is available using the computed property
     if (!isInitialized.value) {
-      console.warn('Musical audio: V3 audio system not initialized, cannot play note');
+      console.warn(`Musical audio: V3 audio system not initialized (${isInitialized.value}), cannot play note`);
       return;
     }
     
@@ -250,12 +260,14 @@ export function useMusicalAudio() {
       const frequency = noteToFrequency(config.note, config.octave);
       const finalVolume = velocity * config.volume * settings.value.globalVolume;
       
+      console.log(`Musical audio: Playing ${config.note}${config.octave} (${frequency.toFixed(2)}Hz) at ${(finalVolume * 100).toFixed(0)}% volume`);
+      
       // Use the V3 audio system to play the note
       audioV3.triggerNote(frequency, config.duration, finalVolume);
       
-      console.log(`Musical audio triggered node ${nodeIndex}: ${config.note}${config.octave} (${frequency.toFixed(2)}Hz) at ${(finalVolume * 100).toFixed(0)}% volume`);
+      console.log(`Musical audio: Successfully triggered node ${nodeIndex}: ${config.note}${config.octave}`);
     } catch (error) {
-      console.warn(`Failed to trigger note for node ${nodeIndex}:`, error);
+      console.error(`Musical audio: Failed to trigger note for node ${nodeIndex}:`, error);
       handleError(error as Error, `Failed to play note for node ${nodeIndex}`);
     }
   };
@@ -281,6 +293,8 @@ export function useMusicalAudio() {
         config.duration = newSettings.noteDuration!;
       });
     }
+    
+    console.log('Musical audio: Settings updated', newSettings);
   };
 
   /**
@@ -336,7 +350,7 @@ export function useMusicalAudio() {
         }));
       }
       
-      console.log('Configuration imported successfully');
+      console.log('Musical audio: Configuration imported successfully');
     } catch (error) {
       handleError(error as Error, 'Failed to import configuration');
     }

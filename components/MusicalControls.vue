@@ -25,15 +25,6 @@
       </div>
     </div>
 
-    <!-- Debug Info (temporary) -->
-    <div class="p-3 bg-info-500/10 border border-info-500/20 rounded-xl text-xs">
-      <div class="text-info-200 space-y-1">
-        <div>Musical Audio Initialized: <span class="font-mono">{{ isInitialized }}</span></div>
-        <div>Musical Audio Initializing: <span class="font-mono">{{ isInitializing }}</span></div>
-        <div>Provider Status: <span class="font-mono">{{ getProviderStatus().name }} - {{ getProviderStatus().status }}</span></div>
-      </div>
-    </div>
-
     <!-- Audio System Warning -->
     <div v-if="!isInitialized" class="p-4 bg-warning-500/10 border border-warning-500/20 rounded-xl">
       <div class="flex items-center space-x-3 mb-3">
@@ -237,7 +228,7 @@
               ></button>
             </div>
             <button
-              @click="triggerNodeNote(index)"
+              @click="testSingleNode(index)"
               :disabled="!isInitialized"
               class="px-2 py-1 bg-primary-600/20 hover:bg-primary-600/40 disabled:bg-secondary-600/20 disabled:cursor-not-allowed text-primary-300 disabled:text-secondary-500 text-xs rounded transition-colors duration-200"
             >
@@ -405,11 +396,12 @@ const formatScaleName = (scale: ScaleType): string => {
  */
 const playTestTone = () => {
   if (!isInitialized.value) {
-    console.warn('Musical audio: Audio system not initialized');
+    console.warn('Musical controls: Audio system not initialized');
     return;
   }
   
   try {
+    console.log('Musical controls: Playing test tone');
     // Use the first node but set it to the root note temporarily for testing
     const originalNote = nodeConfigs.value[0]?.note;
     const originalOctave = nodeConfigs.value[0]?.octave;
@@ -426,8 +418,21 @@ const playTestTone = () => {
       }, 100);
     }
   } catch (error) {
-    console.error('Failed to play test tone:', error);
+    console.error('Musical controls: Failed to play test tone:', error);
   }
+};
+
+/**
+ * Test a single node
+ */
+const testSingleNode = (nodeIndex: number) => {
+  if (!isInitialized.value) {
+    console.warn('Musical controls: Audio system not initialized');
+    return;
+  }
+  
+  console.log(`Musical controls: Testing single node ${nodeIndex}`);
+  triggerNodeNote(nodeIndex, 0.8);
 };
 
 /**
@@ -435,10 +440,11 @@ const playTestTone = () => {
  */
 const testAllNodes = () => {
   if (!isInitialized.value) {
-    console.warn('Musical audio: Audio system not initialized');
+    console.warn('Musical controls: Audio system not initialized');
     return;
   }
   
+  console.log('Musical controls: Testing all nodes');
   nodeConfigs.value.forEach((config, index) => {
     if (config.enabled) {
       setTimeout(() => triggerNodeNote(index), index * 100);
