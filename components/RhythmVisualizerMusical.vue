@@ -274,6 +274,9 @@ const initializeVisualization = async () => {
 
     await nextTick();
 
+    // Add a small delay to ensure canvas element is fully rendered
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     if (!initializeCanvas()) {
       throw new Error('Failed to initialize canvas');
     }
@@ -641,7 +644,7 @@ watch([settings, nodeConfigs], () => {
 // Watch for reset events from the rhythm store
 watch(() => rhythmStore.currentTime, (newTime, oldTime) => {
   // Detect reset when currentTime goes from positive to 0
-  if (oldValue > 0 && newTime === 0) {
+  if (oldTime > 0 && newTime === 0) {
     resetNodes();
     if (!rhythmStore.isPlaying) {
       drawNodes();
