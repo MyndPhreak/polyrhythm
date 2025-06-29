@@ -81,7 +81,7 @@
                       <LoadingSpinner size="lg" />
                     </div>
                   </template>
-                  <RhythmVisualizerMusical @node-hit="handleNodeHit" />
+                  <RhythmVisualizerMusicalV2 @node-hit="handleNodeHit" />
                 </ClientOnly>
               </div>
 
@@ -98,28 +98,18 @@
 
             <!-- Controls Panel -->
             <aside class="xl:col-span-4 space-y-6" aria-label="Control panel">
-              <!-- Audio Controls V3 -->
+              <!-- Musical Controls V2 -->
               <div class="animate-fade-in" style="animation-delay: 0.3s">
                 <ClientOnly>
                   <template #fallback>
                     <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
                   </template>
-                  <AudioControlsV3 />
-                </ClientOnly>
-              </div>
-
-              <!-- Musical Controls -->
-              <div class="animate-fade-in" style="animation-delay: 0.4s">
-                <ClientOnly>
-                  <template #fallback>
-                    <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
-                  </template>
-                  <MusicalControls />
+                  <MusicalControlsV2 />
                 </ClientOnly>
               </div>
 
               <!-- Rhythm Controls -->
-              <div class="sticky top-8 animate-fade-in" style="animation-delay: 0.5s">
+              <div class="sticky top-8 animate-fade-in" style="animation-delay: 0.4s">
                 <ClientOnly>
                   <template #fallback>
                     <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
@@ -136,7 +126,7 @@
           <div class="container mx-auto px-4 text-center">
             <div class="border-t border-white/10 pt-8">
               <p class="text-secondary-400 text-sm">
-                Built with Vue 3, Nuxt 3, Musical Scales, and Advanced Audio Architecture
+                Built with Vue 3, Nuxt 3, Musical Scales, and Auto-Initializing Audio Architecture
               </p>
             </div>
           </div>
@@ -159,10 +149,10 @@ import type { NodeHitEvent } from '~/types';
 
 // Set page metadata
 useHead({
-  title: 'Musical Polyrhythm Generator - Interactive Music Creation with Scales',
+  title: 'Musical Polyrhythm Generator - Auto-Initializing Audio System',
   meta: [
-    { name: 'description', content: 'Create and visualize complex polyrhythmic patterns with musical scales, individual note assignment, and interactive audio visualization' },
-    { name: 'keywords', content: 'polyrhythm, music, rhythm, generator, visualization, audio, synthesis, musical scales, notes, interactive' },
+    { name: 'description', content: 'Create and visualize complex polyrhythmic patterns with musical scales, individual note assignment, and auto-initializing audio system' },
+    { name: 'keywords', content: 'polyrhythm, music, rhythm, generator, visualization, audio, synthesis, musical scales, notes, interactive, auto-initialize' },
     { name: 'theme-color', content: '#1e293b' }
   ],
   link: [
@@ -186,7 +176,7 @@ const handleNodeHit = (event: NodeHitEvent) => {
     // Log the event for debugging
     console.log('Musical node hit:', event);
     
-    // Audio is now handled directly in the RhythmVisualizerMusical component
+    // Audio is now handled directly in the RhythmVisualizerMusicalV2 component
     // This event can be used for additional visual effects or analytics
   } catch (err) {
     handleError(err as Error, 'Failed to handle musical node hit');
@@ -203,7 +193,7 @@ const initializeApplication = async () => {
     // Initialize stores
     rhythmStore.initialize();
     
-    // Audio initialization is handled by the useMusicalAudio composable
+    // Audio initialization is now handled automatically by the global audio system
     
     isInitialized.value = true;
   } catch (err) {
