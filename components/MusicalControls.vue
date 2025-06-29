@@ -25,14 +25,30 @@
       </div>
     </div>
 
+    <!-- Debug Info (temporary) -->
+    <div class="p-3 bg-info-500/10 border border-info-500/20 rounded-xl text-xs">
+      <div class="text-info-200 space-y-1">
+        <div>Musical Audio Initialized: <span class="font-mono">{{ isInitialized }}</span></div>
+        <div>Musical Audio Initializing: <span class="font-mono">{{ isInitializing }}</span></div>
+        <div>Provider Status: <span class="font-mono">{{ getProviderStatus().name }} - {{ getProviderStatus().status }}</span></div>
+      </div>
+    </div>
+
     <!-- Audio System Warning -->
     <div v-if="!isInitialized" class="p-4 bg-warning-500/10 border border-warning-500/20 rounded-xl">
-      <div class="flex items-center space-x-3">
+      <div class="flex items-center space-x-3 mb-3">
         <ExclamationTriangleIcon class="w-5 h-5 text-warning-400 flex-shrink-0" />
         <div class="text-warning-200 text-sm">
           Audio system not initialized. Please start the audio system in the Audio Controls V3 panel first.
         </div>
       </div>
+      <button
+        @click="initializeAudioSystem"
+        :disabled="isInitializing"
+        class="px-4 py-2 bg-warning-600 hover:bg-warning-700 disabled:bg-warning-800 text-white rounded-lg transition-colors duration-200 text-sm"
+      >
+        {{ isInitializing ? 'Initializing...' : 'Try Initialize Audio' }}
+      </button>
     </div>
 
     <!-- Scale Settings -->
@@ -345,7 +361,10 @@ const {
   exportConfiguration,
   importConfiguration,
   noteToFrequency,
-  isInitialized
+  isInitialized,
+  isInitializing,
+  initializeAudioSystem,
+  getProviderStatus
 } = useMusicalAudio();
 
 // Local state
@@ -386,13 +405,26 @@ const formatScaleName = (scale: ScaleType): string => {
  */
 const playTestTone = () => {
   if (!isInitialized.value) {
-    console.warn('Audio system not initialized');
+    console.warn('Musical audio: Audio system not initialized');
     return;
   }
   
   try {
-    const frequency = noteToFrequency(localSettings.rootNote, 4);
-    triggerNodeNote(0, 0.8); // Use the first node's configuration but with root note
+    // Use the first node but set it to the root note temporarily for testing
+    const originalNote = nodeConfigs.value[0]?.note;
+    const originalOctave = nodeConfigs.value[0]?.octave;
+    
+    if (nodeConfigs.value[0]) {
+      setNodeNote(0, localSettings.rootNote, 4);
+      triggerNodeNote(0, 0.8);
+      
+      // Restore original note after a delay
+      setTimeout(() => {
+        if (originalNote && originalOctave) {
+          setNodeNote(0, originalNote, originalOctave);
+        }
+      }, 100);
+    }
   } catch (error) {
     console.error('Failed to play test tone:', error);
   }
@@ -403,7 +435,7 @@ const playTestTone = () => {
  */
 const testAllNodes = () => {
   if (!isInitialized.value) {
-    console.warn('Audio system not initialized');
+    console.warn('Musical audio: Audio system not initialized');
     return;
   }
   
@@ -470,6 +502,11 @@ const importConfig = (event: Event) => {
 watch(settings, (newSettings) => {
   Object.assign(localSettings, newSettings);
 }, { deep: true });
+
+// Debug logging for state changes
+watch(isInitialized, (newValue) => {
+  console.log(`MusicalControls: isInitialized changed to ${newValue}`);
+}, { immediate: true });
 </script>
 
 <style scoped>

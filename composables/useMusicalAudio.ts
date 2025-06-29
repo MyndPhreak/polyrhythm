@@ -48,7 +48,7 @@ export interface MusicalAudioSettings {
 export function useMusicalAudio() {
   const { handleError } = useErrorHandler();
   
-  // Get the V3 audio system instance
+  // Get the V3 audio system instance - this is the key fix
   const audioV3 = useAudioV3();
 
   // Musical settings
@@ -64,6 +64,12 @@ export function useMusicalAudio() {
   // Node configurations
   const nodeConfigs = ref<NodeAudioConfig[]>([]);
   const nodeCount = ref(8);
+
+  // Create reactive computed properties that directly reference the V3 system
+  const isInitialized = computed(() => audioV3.isInitialized.value);
+  const isInitializing = computed(() => audioV3.isInitializing.value);
+  const currentVolume = computed(() => audioV3.currentVolume.value);
+  const initializationError = computed(() => audioV3.initializationError.value);
 
   /**
    * Initialize node configurations
@@ -234,9 +240,9 @@ export function useMusicalAudio() {
       return;
     }
     
-    // Check if audio system is available
-    if (!audioV3.isInitialized.value) {
-      console.warn('Audio system not initialized, cannot play note');
+    // Check if audio system is available using the computed property
+    if (!isInitialized.value) {
+      console.warn('Musical audio: V3 audio system not initialized, cannot play note');
       return;
     }
     
@@ -247,7 +253,7 @@ export function useMusicalAudio() {
       // Use the V3 audio system to play the note
       audioV3.triggerNote(frequency, config.duration, finalVolume);
       
-      console.log(`Triggered node ${nodeIndex}: ${config.note}${config.octave} (${frequency.toFixed(2)}Hz) at ${(finalVolume * 100).toFixed(0)}% volume`);
+      console.log(`Musical audio triggered node ${nodeIndex}: ${config.note}${config.octave} (${frequency.toFixed(2)}Hz) at ${(finalVolume * 100).toFixed(0)}% volume`);
     } catch (error) {
       console.warn(`Failed to trigger note for node ${nodeIndex}:`, error);
       handleError(error as Error, `Failed to play note for node ${nodeIndex}`);
@@ -346,17 +352,23 @@ export function useMusicalAudio() {
   // Initialize with default node count
   initializeNodes(8);
 
-  // Watch for audio system initialization
-  watch(() => audioV3.isInitialized.value, (isInitialized) => {
-    if (isInitialized) {
+  // Watch for audio system initialization changes and log them
+  watch(isInitialized, (newValue, oldValue) => {
+    console.log(`Musical audio: V3 system initialization changed from ${oldValue} to ${newValue}`);
+    if (newValue) {
       console.log('Musical audio system: V3 audio system is now available');
     } else {
       console.log('Musical audio system: V3 audio system is not available');
     }
-  });
+  }, { immediate: true });
+
+  // Also watch the raw V3 system state for debugging
+  watch(() => audioV3.isInitialized.value, (newValue) => {
+    console.log(`Musical audio: Raw V3 isInitialized = ${newValue}`);
+  }, { immediate: true });
 
   return {
-    // State
+    // State - use computed properties that directly reference V3 system
     settings: readonly(settings),
     nodeConfigs: readonly(nodeConfigs),
     nodeCount: readonly(nodeCount),
@@ -383,19 +395,21 @@ export function useMusicalAudio() {
     exportConfiguration,
     importConfiguration,
     
-    // Audio system integration - expose the V3 system directly
-    isInitialized: audioV3.isInitialized,
-    isInitializing: audioV3.isInitializing,
-    currentVolume: audioV3.currentVolume,
-    initializationError: audioV3.initializationError,
+    // Audio system integration - use computed properties for reactive state
+    isInitialized,
+    isInitializing,
+    currentVolume,
+    initializationError,
+    
+    // Direct V3 methods
     initializeAudioSystem: audioV3.initializeAudioSystem,
     setVolume: audioV3.setVolume,
     getProviderStatus: audioV3.getProviderStatus,
     restartAudioSystem: audioV3.restartAudioSystem,
     dispose: audioV3.dispose,
     
-    // Legacy compatibility
-    isContextStarted: audioV3.isContextStarted,
+    // Legacy compatibility - also use computed properties
+    isContextStarted: isInitialized,
     startAudioContext: audioV3.startAudioContext,
     setReverbWet: audioV3.setReverbWet,
     setDelayWet: audioV3.setDelayWet,
