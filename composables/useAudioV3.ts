@@ -187,9 +187,13 @@ class ImprovedToneProvider implements SimpleAudioProvider {
         }).connect(this.masterVolume);
 
         // Create the synthesizer with default settings
-        this.synth = new this.Tone.Synth({
+        this.synth = new this.Tone.FMSynth({
+          harmonicity: 3,
+          modulationIndex: 10,
           oscillator: { type: 'sine' },
-          envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.2 }
+          envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.2 },
+          modulation: { type: 'square' },
+          modulationEnvelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.2 }
         });
 
         // Connect synth through effects chain
@@ -336,6 +340,28 @@ class ImprovedToneProvider implements SimpleAudioProvider {
         }
 
         console.log('Updated envelope settings:', envelope);
+
+        // Update FM synth-specific settings
+        if (settings.harmonicity !== undefined) {
+          this.synth.harmonicity.value = settings.harmonicity;
+          console.log(`Updated harmonicity to: ${settings.harmonicity}`);
+        }
+        if (settings.modulationIndex !== undefined) {
+          this.synth.modulationIndex.value = settings.modulationIndex;
+          console.log(`Updated modulationIndex to: ${settings.modulationIndex}`);
+        }
+        if (settings.modulation?.type) {
+          this.synth.modulation.type = settings.modulation.type;
+          console.log(`Updated modulation type to: ${settings.modulation.type}`);
+        }
+        if (settings.modulationEnvelope) {
+          const mEnv = settings.modulationEnvelope;
+          if (typeof mEnv.attack === 'number') this.synth.modulationEnvelope.attack = mEnv.attack;
+          if (typeof mEnv.decay === 'number') this.synth.modulationEnvelope.decay = mEnv.decay;
+          if (typeof mEnv.sustain === 'number') this.synth.modulationEnvelope.sustain = mEnv.sustain;
+          if (typeof mEnv.release === 'number') this.synth.modulationEnvelope.release = mEnv.release;
+          console.log('Updated modulation envelope settings:', mEnv);
+        }
       }
 
       // Update reverb settings if provided
@@ -445,13 +471,13 @@ export function useAudioV3() {
 
   // State
   const activeProvider = ref<SimpleAudioProvider | null>(null);
-  const isInitialized = ref(false);
-  const isInitializing = ref(false);
-  const currentVolume = ref(AUDIO_CONSTANTS.DEFAULT_MASTER_VOLUME);
+  const isInitialized = ref<boolean>(false);
+  const isInitializing = ref<boolean>(false);
+  const currentVolume = ref<number>(AUDIO_CONSTANTS.DEFAULT_MASTER_VOLUME);
   const initializationError = ref<string>('');
 
   // Flag to track if auto-initialization has been attempted
-  const autoInitAttempted = ref(false);
+  const autoInitAttempted = ref<boolean>(false);
 
   /**
    * Initialize audio system with progressive fallback
@@ -646,7 +672,7 @@ export function useAudioV3() {
           try {
             (provider as any).updateSynthParams(settings);
           } catch (error) {
-            handleError('Failed to update synth parameters', error);
+            handleError(error as Error, 'Failed to update synth parameters');
           }
         } else {
           console.log('Current provider does not support synth parameter updates');

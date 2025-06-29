@@ -15,7 +15,7 @@ export function useCanvas() {
 
     const canvas = canvasRef.value;
     const ctx = canvas.getContext('2d');
-    
+
     if (!ctx) {
       handleError(ERROR_MESSAGES.CANVAS_CONTEXT_FAILED);
       return false;
@@ -54,10 +54,14 @@ export function useCanvas() {
    */
   const clearCanvas = () => {
     if (!canvasRef.value || !context.value) return;
-    
+
     const canvas = canvasRef.value;
     const ctx = context.value;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const dpr = window.devicePixelRatio || 1;
+
+    // Clear using CSS dimensions to account for the DPR scaling
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
   };
 
   onMounted(() => {

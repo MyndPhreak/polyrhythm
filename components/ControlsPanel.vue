@@ -13,7 +13,7 @@
         <span class="text-xs text-secondary-400">Active</span>
       </div>
     </div>
-    
+
     <!-- Rhythm Controls -->
     <div class="space-y-6">
       <div class="border-b border-white/10 pb-6">
@@ -21,7 +21,7 @@
           <MusicalNoteIcon class="w-5 h-5 text-primary-400" />
           <span>Rhythm Settings</span>
         </h3>
-        
+
         <!-- Node Count -->
         <div class="space-y-3">
           <label class="block text-sm font-medium text-secondary-200" for="node-count">
@@ -123,7 +123,7 @@
           <SpeakerWaveIcon class="w-5 h-5 text-accent-400" />
           <span>Sound Settings</span>
         </h3>
-        
+
         <!-- Oscillator Type -->
         <div class="space-y-3">
           <label class="block text-sm font-medium text-secondary-200" for="oscillator-type">
@@ -155,7 +155,7 @@
             min="0.01"
             max="1"
             step="0.01"
-            v-model="localSynthSettings.envelope.attack"
+            v-model.number="localSynthSettings.envelope.attack"
             class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
           />
           <div class="flex justify-between text-xs text-secondary-400">
@@ -175,7 +175,7 @@
             min="0.1"
             max="2"
             step="0.1"
-            v-model="localSynthSettings.envelope.release"
+            v-model.number="localSynthSettings.envelope.release"
             class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
           />
           <div class="flex justify-between text-xs text-secondary-400">
@@ -187,7 +187,7 @@
         <!-- Reverb -->
         <div class="space-y-3">
           <label class="block text-sm font-medium text-secondary-200" for="reverb">
-            Reverb: <span class="text-accent-400 font-semibold">{{ localReverbSettings.wet.toFixed(2) }}</span>
+            Reverb: <span class="text-accent-400 font-semibold">{{ Number(localReverbSettings.wet).toFixed(2) }}</span>
           </label>
           <input
             id="reverb"
@@ -195,7 +195,7 @@
             min="0"
             max="1"
             step="0.01"
-            v-model="localReverbSettings.wet"
+            v-model.number="localReverbSettings.wet"
             class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
           />
           <div class="flex justify-between text-xs text-secondary-400">
@@ -281,12 +281,14 @@ import {
 import { useRhythmStore } from '~/stores/rhythmStore';
 import { useAudioStore } from '~/stores/audioStore';
 import { useErrorHandler } from '~/composables/useErrorHandler';
+import { useAudioV3 } from '~/composables/useAudioV3';
 import { validateNodeCount, validateSpeed, validateVolume } from '~/utils/validation';
 import { debounce } from '~/utils/debounce';
 
 const rhythmStore = useRhythmStore();
 const audioStore = useAudioStore();
 const { error, handleError, clearError } = useErrorHandler();
+const { updateSynthParams, setVolume } = useAudioV3();
 
 // Local reactive state for controls
 const nodeCount = ref(rhythmStore.nodeCount);
@@ -313,7 +315,7 @@ const masterVolumeError = ref<string>('');
 const debouncedUpdateNodeCount = debounce((value: number) => {
   const validation = validateNodeCount(value);
   nodeCountError.value = validation.error || '';
-  
+
   try {
     rhythmStore.setNodeCount(validation.value);
   } catch (err) {
@@ -324,7 +326,7 @@ const debouncedUpdateNodeCount = debounce((value: number) => {
 const debouncedUpdateBaseSpeed = debounce((value: number) => {
   const validation = validateSpeed(value);
   baseSpeedError.value = validation.error || '';
-  
+
   try {
     rhythmStore.setBaseSpeed(validation.value);
   } catch (err) {
@@ -343,9 +345,10 @@ const debouncedUpdateSpeedRatio = debounce((value: number) => {
 const debouncedUpdateMasterVolume = debounce((value: number) => {
   const validation = validateVolume(value);
   masterVolumeError.value = validation.error || '';
-  
+
   try {
     audioStore.updateMasterVolume(validation.value);
+    setVolume(validation.value);
   } catch (err) {
     handleError(err as Error, 'Failed to update master volume');
   }
@@ -354,6 +357,11 @@ const debouncedUpdateMasterVolume = debounce((value: number) => {
 const debouncedUpdateSynthSettings = debounce(() => {
   try {
     audioStore.updateSynthSettings(localSynthSettings);
+    updateSynthParams({
+      oscillator: localSynthSettings.oscillator,
+      envelope: localSynthSettings.envelope,
+      reverb: localReverbSettings
+    });
   } catch (err) {
     handleError(err as Error, 'Failed to update synth settings');
   }
@@ -362,6 +370,11 @@ const debouncedUpdateSynthSettings = debounce(() => {
 const debouncedUpdateReverbSettings = debounce(() => {
   try {
     audioStore.$patch({ reverbSettings: localReverbSettings });
+    updateSynthParams({
+      oscillator: localSynthSettings.oscillator,
+      envelope: localSynthSettings.envelope,
+      reverb: localReverbSettings
+    });
   } catch (err) {
     handleError(err as Error, 'Failed to update reverb settings');
   }

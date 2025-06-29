@@ -17,12 +17,13 @@ export interface RhythmState {
 export interface SynthSettings {
   oscillator: {
     type: 'sine' | 'triangle' | 'sawtooth' | 'square';
+    // Can be extended with more oscillator options if needed
   };
   envelope: {
-    attack: number;
-    decay: number;
-    sustain: number;
-    release: number;
+    attack: number;   // Time in seconds for initial ramp up
+    decay: number;    // Time in seconds from attack peak to sustain level
+    sustain: number;  // Level (0-1) to sustain while note is held
+    release: number;  // Time in seconds for release after note is released
   };
 }
 
