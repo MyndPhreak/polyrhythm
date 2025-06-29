@@ -47,10 +47,10 @@
           <div class="container mx-auto px-4 text-center">
             <div class="animate-fade-in">
               <h1 class="text-5xl md:text-6xl font-bold bg-gradient-to-r from-white via-primary-200 to-accent-300 bg-clip-text text-transparent mb-4">
-                Polyrhythm Generator V3
+                Musical Polyrhythm Generator
               </h1>
               <p class="text-xl text-secondary-300 max-w-2xl mx-auto leading-relaxed">
-                Create complex polyrhythmic patterns with simplified, reliable audio system
+                Create complex polyrhythmic patterns with musical scales, individual note assignment, and interactive audio visualization
               </p>
             </div>
           </div>
@@ -60,14 +60,14 @@
         <main class="container mx-auto px-4 pb-8">
           <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
             <!-- Visualizer Section -->
-            <section class="xl:col-span-8 space-y-6" aria-label="Rhythm visualization">
+            <section class="xl:col-span-8 space-y-6" aria-label="Musical rhythm visualization">
               <div class="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 shadow-strong p-6 animate-fade-in">
                 <div class="flex items-center justify-between mb-6">
                   <h2 class="text-2xl font-semibold text-white flex items-center space-x-3">
                     <div class="w-8 h-8 bg-primary-500/20 rounded-lg flex items-center justify-center">
                       <ChartBarIcon class="w-5 h-5 text-primary-400" />
                     </div>
-                    <span>Visualization</span>
+                    <span>Musical Visualization</span>
                   </h2>
                   <div class="flex items-center space-x-2 text-sm text-secondary-400">
                     <div class="w-2 h-2 bg-success-400 rounded-full animate-pulse"></div>
@@ -81,7 +81,7 @@
                       <LoadingSpinner size="lg" />
                     </div>
                   </template>
-                  <RhythmVisualizerV3 @node-hit="handleNodeHit" />
+                  <RhythmVisualizerMusical @node-hit="handleNodeHit" />
                 </ClientOnly>
               </div>
 
@@ -108,8 +108,18 @@
                 </ClientOnly>
               </div>
 
+              <!-- Musical Controls -->
+              <div class="animate-fade-in" style="animation-delay: 0.4s">
+                <ClientOnly>
+                  <template #fallback>
+                    <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
+                  </template>
+                  <MusicalControls />
+                </ClientOnly>
+              </div>
+
               <!-- Rhythm Controls -->
-              <div class="sticky top-8 animate-fade-in" style="animation-delay: 0.4s">
+              <div class="sticky top-8 animate-fade-in" style="animation-delay: 0.5s">
                 <ClientOnly>
                   <template #fallback>
                     <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
@@ -126,7 +136,7 @@
           <div class="container mx-auto px-4 text-center">
             <div class="border-t border-white/10 pt-8">
               <p class="text-secondary-400 text-sm">
-                Built with Vue 3, Nuxt 3, and Simplified Audio Architecture V3
+                Built with Vue 3, Nuxt 3, Musical Scales, and Advanced Audio Architecture
               </p>
             </div>
           </div>
@@ -149,10 +159,10 @@ import type { NodeHitEvent } from '~/types';
 
 // Set page metadata
 useHead({
-  title: 'Polyrhythm Generator V3 - Simplified Audio System',
+  title: 'Musical Polyrhythm Generator - Interactive Music Creation with Scales',
   meta: [
-    { name: 'description', content: 'Create and visualize complex polyrhythmic patterns with simplified, reliable audio system' },
-    { name: 'keywords', content: 'polyrhythm, music, rhythm, generator, visualization, audio, synthesis, simplified, reliable' },
+    { name: 'description', content: 'Create and visualize complex polyrhythmic patterns with musical scales, individual note assignment, and interactive audio visualization' },
+    { name: 'keywords', content: 'polyrhythm, music, rhythm, generator, visualization, audio, synthesis, musical scales, notes, interactive' },
     { name: 'theme-color', content: '#1e293b' }
   ],
   link: [
@@ -174,12 +184,12 @@ const isInitialized = ref(false);
 const handleNodeHit = (event: NodeHitEvent) => {
   try {
     // Log the event for debugging
-    console.log('Node hit:', event);
+    console.log('Musical node hit:', event);
     
-    // Audio is now handled directly in the RhythmVisualizerV3 component
+    // Audio is now handled directly in the RhythmVisualizerMusical component
     // This event can be used for additional visual effects or analytics
   } catch (err) {
-    handleError(err as Error, 'Failed to handle node hit');
+    handleError(err as Error, 'Failed to handle musical node hit');
   }
 };
 
@@ -193,7 +203,7 @@ const initializeApplication = async () => {
     // Initialize stores
     rhythmStore.initialize();
     
-    // Audio initialization is handled by the useAudioV3 composable
+    // Audio initialization is handled by the useMusicalAudio composable
     
     isInitialized.value = true;
   } catch (err) {
