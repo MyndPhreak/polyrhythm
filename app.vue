@@ -98,8 +98,18 @@
 
             <!-- Controls Panel -->
             <aside class="xl:col-span-4 space-y-6" aria-label="Control panel">
-              <!-- Audio Controls V3 -->
+              <!-- FM Synthesizer Instrument -->
               <div class="animate-fade-in" style="animation-delay: 0.3s">
+                <ClientOnly>
+                  <template #fallback>
+                    <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
+                  </template>
+                  <FMSynthInstrument />
+                </ClientOnly>
+              </div>
+
+              <!-- Audio Controls V3 -->
+              <div class="animate-fade-in" style="animation-delay: 0.4s">
                 <ClientOnly>
                   <template #fallback>
                     <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
@@ -109,7 +119,7 @@
               </div>
 
               <!-- Musical Controls -->
-              <div class="animate-fade-in" style="animation-delay: 0.4s">
+              <div class="animate-fade-in" style="animation-delay: 0.5s">
                 <ClientOnly>
                   <template #fallback>
                     <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
@@ -119,7 +129,7 @@
               </div>
 
               <!-- Rhythm Controls -->
-              <div class="sticky top-8 animate-fade-in" style="animation-delay: 0.5s">
+              <div class="sticky top-8 animate-fade-in" style="animation-delay: 0.6s">
                 <ClientOnly>
                   <template #fallback>
                     <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
