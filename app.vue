@@ -96,6 +96,16 @@
               </div>
             </section>
 
+              <!-- Audio Controls V3 -->
+              <div class="animate-fade-in" style="animation-delay: 0.4s">
+                <ClientOnly>
+                  <template #fallback>
+                    <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
+                  </template>
+                  <AudioControlsV3 />
+                </ClientOnly>
+              </div>
+
             <!-- Controls Panel -->
             <aside class="xl:col-span-4 space-y-6" aria-label="Control panel">
               <!-- FM Synthesizer Instrument -->
@@ -105,16 +115,6 @@
                     <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
                   </template>
                   <FMSynthInstrument />
-                </ClientOnly>
-              </div>
-
-              <!-- Audio Controls V3 -->
-              <div class="animate-fade-in" style="animation-delay: 0.4s">
-                <ClientOnly>
-                  <template #fallback>
-                    <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
-                  </template>
-                  <AudioControlsV3 />
                 </ClientOnly>
               </div>
 
