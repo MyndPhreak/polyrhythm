@@ -30,7 +30,7 @@ const canvasRef = ref<HTMLCanvasElement>()
 const canvasWidth = ref(props.width)
 const canvasHeight = ref(props.height)
 
-const { setupCanvas, clearCanvas, drawCircle, drawLine } = useCanvas()
+const { initializeCanvas, clearCanvas } = useCanvas()
 const { audioContext, isInitialized } = useMusicalAudio()
 
 let animationId: number | null = null
@@ -68,7 +68,11 @@ const animate = (timestamp: number) => {
         const x = centerX + Math.cos(elementAngle) * radius * 0.7
         const y = centerY + Math.sin(elementAngle) * radius * 0.7
 
-        drawCircle(canvasRef.value, x, y, 8, '#10b981')
+        // Draw circle using canvas API
+        ctx.fillStyle = '#10b981'
+        ctx.beginPath()
+        ctx.arc(x, y, 8, 0, Math.PI * 2)
+        ctx.fill()
       }
 
       // Draw connecting lines
@@ -81,7 +85,11 @@ const animate = (timestamp: number) => {
         const endX = centerX + Math.cos(lineAngle) * radius * 0.9
         const endY = centerY + Math.sin(lineAngle) * radius * 0.9
 
-        drawLine(canvasRef.value, startX, startY, endX, endY)
+        // Draw line using canvas API
+        ctx.beginPath()
+        ctx.moveTo(startX, startY)
+        ctx.lineTo(endX, endY)
+        ctx.stroke()
       }
     }
   }
@@ -91,7 +99,7 @@ const animate = (timestamp: number) => {
 
 onMounted(() => {
   if (canvasRef.value) {
-    setupCanvas(canvasRef.value, canvasWidth.value, canvasHeight.value)
+    initializeCanvas()
     animationId = requestAnimationFrame(animate)
   }
 })
