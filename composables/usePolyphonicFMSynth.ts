@@ -174,20 +174,27 @@ function createPolyphonicSynthInstance() {
 
       console.log('Audio context is now running, creating audio components...');
 
-      // Create master volume control with proper scaling
-      masterVolume = new Tone.Volume(Tone.gainToDb(parameters.masterVolume * 0.5)).toDestination();
+      // Create master volume control with proper scaling - separate from connection
+      masterVolume = new Tone.Volume(Tone.gainToDb(parameters.masterVolume * 0.5));
       console.log('Master volume created');
 
-      // Create reverb effect
+      // Create reverb effect - separate from connection
       reverb = new Tone.Reverb({
         decay: 2.5,
         wet: parameters.reverbAmount
-      }).connect(masterVolume);
+      });
+      console.log('Reverb created');
 
-      console.log('Reverb created, generating impulse response...');
+      console.log('Generating reverb impulse response...');
       // Wait for reverb to generate its impulse response
       await reverb.generate();
       console.log('Reverb impulse response generated');
+
+      // Now connect the audio nodes after both are fully created
+      console.log('Connecting audio nodes...');
+      reverb.connect(masterVolume);
+      masterVolume.toDestination();
+      console.log('Audio nodes connected successfully');
 
       // Initialize voice pool
       initializeVoicePool();
