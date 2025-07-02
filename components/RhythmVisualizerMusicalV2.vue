@@ -143,7 +143,7 @@ import { ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/vue/24/outlin
 import { useRhythmStore } from '~/stores/rhythmStore';
 import { useCanvas } from '~/composables/useCanvas';
 import { useErrorHandler } from '~/composables/useErrorHandler';
-import { useMusicalAudioV2 } from '~/composables/useMusicalAudioV2';
+import { useMusicalAudio } from '~/composables/useMusicalAudio';
 import { CANVAS_CONSTANTS } from '~/constants';
 import type { CanvasNode, NodeHitEvent } from '~/types';
 
@@ -159,7 +159,7 @@ const {
   getNodeFrequency,
   initializeNodes,
   isInitialized: audioInitialized
-} = useMusicalAudioV2();
+} = useMusicalAudio();
 
 // Component state
 const isLoading = ref(true);

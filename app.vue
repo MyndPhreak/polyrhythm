@@ -81,7 +81,7 @@
                       <LoadingSpinner size="lg" />
                     </div>
                   </template>
-                  <RhythmVisualizerMusical @node-hit="handleNodeHit" />
+                  <RhythmVisualizerMusicalV2 @node-hit="handleNodeHit" />
                 </ClientOnly>
               </div>
 
@@ -106,26 +106,6 @@
                     <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
                   </template>
                   <PolyphonicFMSynthInstrument />
-                </ClientOnly>
-              </div>
-
-              <!-- Audio Controls V3 -->
-              <div class="animate-fade-in" style="animation-delay: 0.4s">
-                <ClientOnly>
-                  <template #fallback>
-                    <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
-                  </template>
-                  <AudioControlsV3 />
-                </ClientOnly>
-              </div>
-              
-              <!-- FM Synthesizer Instrument -->
-              <div class="animate-fade-in" style="animation-delay: 0.3s">
-                <ClientOnly>
-                  <template #fallback>
-                    <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
-                  </template>
-                  <FMSynthInstrument />
                 </ClientOnly>
               </div>
 
@@ -209,7 +189,7 @@ const handleNodeHit = (event: NodeHitEvent) => {
     // Log the event for debugging
     // console.log('Musical node hit:', event);
     
-    // Audio is now handled directly in the RhythmVisualizerMusical component using global FM synth
+    // Audio is now handled directly in the RhythmVisualizerMusicalV2 component using musical audio
     // This event can be used for additional visual effects or analytics
   } catch (err) {
     handleError(err as Error, 'Failed to handle musical node hit');
