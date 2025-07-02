@@ -74,17 +74,80 @@ function createPolyphonicSynthInstance() {
   // Voice cleanup tracking
   const voiceCleanupTimeouts = new Map<number, number>();
 
+  /**
+   * Validate and normalize parameters to ensure they are within valid ranges
+   */
+  const validateParameters = (params: any): PolyphonicSynthParameters => {
+    const validatedParams = { ...DEFAULT_PARAMETERS };
+
+    // Validate maxVoices - must be at least 1 and at most 32
+    if (typeof params.maxVoices === 'number' && params.maxVoices >= 1 && params.maxVoices <= 32) {
+      validatedParams.maxVoices = Math.floor(params.maxVoices);
+    }
+
+    // Validate attack - must be between 0.01 and 2 seconds
+    if (typeof params.attack === 'number' && params.attack >= 0.01 && params.attack <= 2) {
+      validatedParams.attack = params.attack;
+    }
+
+    // Validate release - must be between 0.1 and 4 seconds
+    if (typeof params.release === 'number' && params.release >= 0.1 && params.release <= 4) {
+      validatedParams.release = params.release;
+    }
+
+    // Validate harmonicity - must be between 0.1 and 10
+    if (typeof params.harmonicity === 'number' && params.harmonicity >= 0.1 && params.harmonicity <= 10) {
+      validatedParams.harmonicity = params.harmonicity;
+    }
+
+    // Validate modulationIndex - must be between 0 and 50
+    if (typeof params.modulationIndex === 'number' && params.modulationIndex >= 0 && params.modulationIndex <= 50) {
+      validatedParams.modulationIndex = params.modulationIndex;
+    }
+
+    // Validate oscillatorType
+    const validOscTypes = ['sine', 'square', 'triangle', 'sawtooth'];
+    if (typeof params.oscillatorType === 'string' && validOscTypes.includes(params.oscillatorType)) {
+      validatedParams.oscillatorType = params.oscillatorType as PolyphonicSynthParameters['oscillatorType'];
+    }
+
+    // Validate modulatorType
+    if (typeof params.modulatorType === 'string' && validOscTypes.includes(params.modulatorType)) {
+      validatedParams.modulatorType = params.modulatorType as PolyphonicSynthParameters['modulatorType'];
+    }
+
+    // Validate masterVolume - must be between 0 and 1
+    if (typeof params.masterVolume === 'number' && params.masterVolume >= 0 && params.masterVolume <= 1) {
+      validatedParams.masterVolume = params.masterVolume;
+    }
+
+    // Validate reverbAmount - must be between 0 and 1
+    if (typeof params.reverbAmount === 'number' && params.reverbAmount >= 0 && params.reverbAmount <= 1) {
+      validatedParams.reverbAmount = params.reverbAmount;
+    }
+
+    // Validate voiceSpread - must be between 0 and 1
+    if (typeof params.voiceSpread === 'number' && params.voiceSpread >= 0 && params.voiceSpread <= 1) {
+      validatedParams.voiceSpread = params.voiceSpread;
+    }
+
+    return validatedParams;
+  };
+
   // Load saved parameters from localStorage
   const loadSavedParameters = () => {
     try {
       const saved = localStorage.getItem('polyphonicFMSynthParameters');
       if (saved) {
         const savedParams = JSON.parse(saved);
-        Object.assign(parameters, savedParams);
-        console.log('Loaded saved polyphonic FM synth parameters:', savedParams);
+        const validatedParams = validateParameters(savedParams);
+        Object.assign(parameters, validatedParams);
+        console.log('Loaded and validated saved polyphonic FM synth parameters:', validatedParams);
       }
     } catch (err) {
-      console.warn('Failed to load saved polyphonic parameters:', err);
+      console.warn('Failed to load saved polyphonic parameters, using defaults:', err);
+      // Reset to defaults if loading fails
+      Object.assign(parameters, DEFAULT_PARAMETERS);
     }
   };
 
@@ -222,7 +285,11 @@ function createPolyphonicSynthInstance() {
    */
   const initializeVoicePool = () => {
     voices.value = [];
-    for (let i = 0; i < parameters.maxVoices; i++) {
+    
+    // Ensure maxVoices is valid before creating voice pool
+    const maxVoices = Math.max(1, Math.min(32, parameters.maxVoices || DEFAULT_PARAMETERS.maxVoices));
+    
+    for (let i = 0; i < maxVoices; i++) {
       voices.value.push({
         id: i,
         isActive: false,
@@ -232,13 +299,23 @@ function createPolyphonicSynthInstance() {
         duration: 0
       });
     }
-    console.log(`Initialized voice pool with ${parameters.maxVoices} voices`);
+    console.log(`Initialized voice pool with ${maxVoices} voices (requested: ${parameters.maxVoices})`);
   };
 
   /**
    * Find an available voice or steal the oldest one
    */
   const allocateVoice = (): Voice | null => {
+    // Ensure voices array is not empty
+    if (voices.value.length === 0) {
+      console.error('Voice pool is empty! Reinitializing...');
+      initializeVoicePool();
+      if (voices.value.length === 0) {
+        console.error('Failed to reinitialize voice pool');
+        return null;
+      }
+    }
+
     // First, try to find an inactive voice
     let availableVoice = voices.value.find(voice => !voice.isActive);
     
