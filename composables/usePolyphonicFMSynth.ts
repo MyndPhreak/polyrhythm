@@ -13,6 +13,7 @@ export interface Voice {
   envelope?: any;
   modulator?: any;
   modulatorEnvelope?: any;
+  panner?: any;
 }
 
 // Polyphonic synthesizer parameters
@@ -68,6 +69,9 @@ function createPolyphonicSynthInstance() {
   let masterVolume: any = null;
   let reverb: any = null;
   let context: AudioContext | null = null;
+
+  // Voice cleanup tracking
+  const voiceCleanupTimeouts = new Map<number, number>();
 
   // Load saved parameters from localStorage
   const loadSavedParameters = () => {
@@ -208,13 +212,13 @@ function createPolyphonicSynthInstance() {
   };
 
   /**
-   * Create FM synthesis components for a voice
+   * Create FM synthesis components for a voice with improved audio mixing
    */
   const createVoiceComponents = (voice: Voice) => {
     if (!Tone || !context) return;
 
     try {
-      // Calculate stereo position based on voice ID
+      // Calculate stereo position based on voice ID for better separation
       const panPosition = (voice.id / (parameters.maxVoices - 1) - 0.5) * parameters.voiceSpread;
 
       // Create carrier oscillator
@@ -229,27 +233,33 @@ function createPolyphonicSynthInstance() {
         type: parameters.modulatorType
       });
 
-      // Create carrier envelope
+      // Create carrier envelope with proper gain scaling to prevent clipping
       voice.envelope = new Tone.Gain(0);
 
       // Create modulator envelope
       voice.modulatorEnvelope = new Tone.Gain(0);
 
       // Create panner for stereo spread
-      const panner = new Tone.Panner(panPosition);
+      voice.panner = new Tone.Panner(panPosition);
+
+      // Create a gain node for voice-level volume control to prevent clipping
+      const voiceGain = new Tone.Gain(voice.velocity * 0.3); // Scale down to prevent clipping
 
       // Connect modulator through its envelope to carrier frequency
       voice.modulator.connect(voice.modulatorEnvelope);
       voice.modulatorEnvelope.connect(voice.oscillator.frequency);
 
-      // Connect carrier through envelope and panner to reverb
+      // Connect carrier through envelope, voice gain, panner to reverb
       voice.oscillator.connect(voice.envelope);
-      voice.envelope.connect(panner);
-      panner.connect(reverb);
+      voice.envelope.connect(voiceGain);
+      voiceGain.connect(voice.panner);
+      voice.panner.connect(reverb);
 
       // Start oscillators
       voice.oscillator.start();
       voice.modulator.start();
+
+      console.log(`Created voice components for voice ${voice.id} at ${voice.frequency}Hz`);
 
     } catch (err) {
       console.warn('Failed to create voice components:', err);
@@ -257,7 +267,7 @@ function createPolyphonicSynthInstance() {
   };
 
   /**
-   * Apply envelope to a voice
+   * Apply envelope to a voice with improved timing
    */
   const applyEnvelope = (voice: Voice) => {
     if (!voice.envelope || !voice.modulatorEnvelope || !context) return;
@@ -265,11 +275,11 @@ function createPolyphonicSynthInstance() {
     const now = context.currentTime;
     const attackTime = parameters.attack;
     const releaseTime = parameters.release;
-    const sustainLevel = voice.velocity;
-    const modulationAmount = parameters.modulationIndex * voice.velocity;
+    const sustainLevel = voice.velocity * 0.5; // Scale down to prevent clipping
+    const modulationAmount = parameters.modulationIndex * voice.velocity * 0.3; // Scale down modulation
 
     try {
-      // Carrier envelope
+      // Carrier envelope with smooth curves
       voice.envelope.gain.setValueAtTime(0, now);
       voice.envelope.gain.linearRampToValueAtTime(sustainLevel, now + attackTime);
       voice.envelope.gain.setValueAtTime(sustainLevel, now + voice.duration - releaseTime);
@@ -280,6 +290,8 @@ function createPolyphonicSynthInstance() {
       voice.modulatorEnvelope.gain.linearRampToValueAtTime(modulationAmount, now + attackTime);
       voice.modulatorEnvelope.gain.setValueAtTime(modulationAmount, now + voice.duration - releaseTime);
       voice.modulatorEnvelope.gain.exponentialRampToValueAtTime(0.001, now + voice.duration);
+
+      console.log(`Applied envelope to voice ${voice.id}: attack=${attackTime}s, release=${releaseTime}s`);
 
     } catch (err) {
       console.warn('Failed to apply envelope:', err);
@@ -293,6 +305,13 @@ function createPolyphonicSynthInstance() {
     if (!voice.isActive) return;
 
     try {
+      // Clear any existing cleanup timeout
+      const existingTimeout = voiceCleanupTimeouts.get(voice.id);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+        voiceCleanupTimeouts.delete(voice.id);
+      }
+
       if (voice.oscillator) {
         voice.oscillator.stop();
         voice.oscillator.dispose();
@@ -315,8 +334,15 @@ function createPolyphonicSynthInstance() {
         voice.modulatorEnvelope = undefined;
       }
 
+      if (voice.panner) {
+        voice.panner.dispose();
+        voice.panner = undefined;
+      }
+
       voice.isActive = false;
-      activeVoiceCount.value--;
+      activeVoiceCount.value = Math.max(0, activeVoiceCount.value - 1);
+
+      console.log(`Stopped voice ${voice.id}, active voices: ${activeVoiceCount.value}`);
 
     } catch (err) {
       console.warn('Failed to stop voice:', err);
@@ -324,7 +350,7 @@ function createPolyphonicSynthInstance() {
   };
 
   /**
-   * Trigger a note with polyphonic capability
+   * Trigger a note with polyphonic capability and improved audio mixing
    */
   const triggerNote = (frequency: number | string, duration: number = 0.5, velocity: number = 0.8): void => {
     if (!isInitialized.value || !context) {
@@ -361,12 +387,15 @@ function createPolyphonicSynthInstance() {
       // Apply envelope
       applyEnvelope(voice);
 
-      // Schedule voice cleanup
-      setTimeout(() => {
+      // Schedule voice cleanup with proper timing
+      const cleanupTimeout = setTimeout(() => {
         stopVoice(voice);
-      }, clampedDuration * 1000);
+        voiceCleanupTimeouts.delete(voice.id);
+      }, clampedDuration * 1000 + 100); // Add 100ms buffer
 
-      // console.log(`Polyphonic FM Synth triggered: ${freq.toFixed(1)}Hz, voice ${voice.id}, active voices: ${activeVoiceCount.value}`);
+      voiceCleanupTimeouts.set(voice.id, cleanupTimeout);
+
+      console.log(`Polyphonic FM Synth triggered: ${freq.toFixed(1)}Hz, voice ${voice.id}, active voices: ${activeVoiceCount.value}`);
 
     } catch (err) {
       console.warn('Failed to trigger polyphonic note:', err);
@@ -388,7 +417,7 @@ function createPolyphonicSynthInstance() {
   };
 
   /**
-   * Update master volume
+   * Update master volume with proper scaling
    */
   const updateMasterVolume = (volume: number) => {
     const clampedVolume = Math.max(0, Math.min(1, volume));
@@ -396,8 +425,10 @@ function createPolyphonicSynthInstance() {
     
     if (masterVolume && isInitialized.value && Tone) {
       try {
-        masterVolume.volume.value = Tone.gainToDb(clampedVolume);
-        console.log(`Updated polyphonic master volume to: ${clampedVolume}`);
+        // Scale volume to prevent clipping with multiple voices
+        const scaledVolume = clampedVolume * 0.7; // Reduce overall volume for polyphonic mixing
+        masterVolume.volume.value = Tone.gainToDb(scaledVolume);
+        console.log(`Updated polyphonic master volume to: ${clampedVolume} (scaled: ${scaledVolume})`);
       } catch (err) {
         console.warn('Failed to update master volume:', err);
       }
@@ -478,11 +509,21 @@ function createPolyphonicSynthInstance() {
    * Stop all active voices
    */
   const stopAllVoices = () => {
+    console.log('Stopping all polyphonic voices...');
+    
+    // Clear all cleanup timeouts
+    voiceCleanupTimeouts.forEach((timeout) => {
+      clearTimeout(timeout);
+    });
+    voiceCleanupTimeouts.clear();
+
+    // Stop all voices
     voices.value.forEach(voice => {
       if (voice.isActive) {
         stopVoice(voice);
       }
     });
+    
     activeVoiceCount.value = 0;
     console.log('Stopped all polyphonic voices');
   };
@@ -540,7 +581,7 @@ function createPolyphonicSynthInstance() {
    */
   const dispose = (): void => {
     try {
-      // Stop all voices
+      // Stop all voices and clear timeouts
       stopAllVoices();
 
       if (reverb) {

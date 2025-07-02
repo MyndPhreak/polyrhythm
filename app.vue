@@ -50,7 +50,7 @@
                 Musical Polyrhythm Generator
               </h1>
               <p class="text-xl text-secondary-300 max-w-2xl mx-auto leading-relaxed">
-                Create complex polyrhythmic patterns with musical scales, individual note assignment, and interactive audio visualization
+                Create complex polyrhythmic patterns with musical scales, polyphonic audio synthesis, and interactive visualization
               </p>
             </div>
           </div>
@@ -67,7 +67,7 @@
                     <div class="w-8 h-8 bg-primary-500/20 rounded-lg flex items-center justify-center">
                       <ChartBarIcon class="w-5 h-5 text-primary-400" />
                     </div>
-                    <span>Musical Visualization</span>
+                    <span>Polyphonic Musical Visualization</span>
                   </h2>
                   <div class="flex items-center space-x-2 text-sm text-secondary-400">
                     <div class="w-2 h-2 bg-success-400 rounded-full animate-pulse"></div>
@@ -187,12 +187,12 @@ const isInitialized = ref(false);
 const handleNodeHit = (event: NodeHitEvent) => {
   try {
     // Log the event for debugging
-    // console.log('Musical node hit:', event);
+    console.log('Polyphonic musical node hit:', event);
     
-    // Audio is now handled directly in the RhythmVisualizerMusicalV2 component using musical audio
+    // Audio is now handled directly in the RhythmVisualizerMusicalV2 component using polyphonic FM synth
     // This event can be used for additional visual effects or analytics
   } catch (err) {
-    handleError(err as Error, 'Failed to handle musical node hit');
+    handleError(err as Error, 'Failed to handle polyphonic musical node hit');
   }
 };
 

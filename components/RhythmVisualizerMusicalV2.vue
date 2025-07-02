@@ -45,6 +45,9 @@
           <div class="text-secondary-300 text-xs">
             Status: <span :class="getNodeStatusClass(hoveredNode)">{{ getNodeStatus(hoveredNode) }}</span>
           </div>
+          <div class="text-secondary-300 text-xs">
+            Active Sounds: <span class="text-purple-400 font-mono">{{ getNodeActiveSounds(hoveredNode) }}</span>
+          </div>
         </div>
         <!-- Tooltip arrow -->
         <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black/90"></div>
@@ -124,6 +127,7 @@
         <div>Audio: <span :class="audioInitialized ? 'text-success-400' : 'text-warning-400'">
           {{ audioInitialized ? 'Ready' : 'Not Ready' }}
         </span></div>
+        <div>Active Sounds: <span class="text-purple-400">{{ totalActiveSounds }}</span></div>
       </div>
     </div>
 
@@ -144,8 +148,20 @@ import { useRhythmStore } from '~/stores/rhythmStore';
 import { useCanvas } from '~/composables/useCanvas';
 import { useErrorHandler } from '~/composables/useErrorHandler';
 import { useMusicalAudio } from '~/composables/useMusicalAudio';
+import { usePolyphonicFMSynth } from '~/composables/usePolyphonicFMSynth';
 import { CANVAS_CONSTANTS } from '~/constants';
 import type { CanvasNode, NodeHitEvent } from '~/types';
+
+// Polyphonic sound management
+interface ActiveSound {
+  id: string;
+  nodeIndex: number;
+  startTime: number;
+  duration: number;
+  frequency: number;
+  volume: number;
+  isActive: boolean;
+}
 
 const rhythmStore = useRhythmStore();
 const { canvasRef, context, initializeCanvas, clearCanvas } = useCanvas();
@@ -154,12 +170,14 @@ const {
   settings,
   nodeConfigs,
   currentScaleNotes,
-  triggerNodeNote,
   getNodeDisplayNote,
   getNodeFrequency,
   initializeNodes,
   isInitialized: audioInitialized
 } = useMusicalAudio();
+
+// Use polyphonic FM synth for better sound management
+const polyphonicSynth = usePolyphonicFMSynth();
 
 // Component state
 const isLoading = ref(true);
@@ -174,6 +192,12 @@ const isDirty = ref(true);
 const nodes = ref<CanvasNode[]>([]);
 const initialNodeStates = ref<CanvasNode[]>([]);
 
+// Polyphonic sound management
+const activeSounds = ref<Map<string, ActiveSound>>(new Map());
+const soundIdCounter = ref(0);
+const maxSimultaneousSounds = ref(16); // Support up to 16 simultaneous sounds
+const soundCleanupInterval = ref<number>(0);
+
 // Define emits
 const emit = defineEmits<{
   (e: 'node-hit', payload: NodeHitEvent): void;
@@ -184,6 +208,10 @@ const nodeCount = computed(() => rhythmStore.nodeCount);
 const currentScaleInfo = computed(() => 
   `${settings.value.rootNote} ${settings.value.scaleType}`
 );
+
+const totalActiveSounds = computed(() => {
+  return Array.from(activeSounds.value.values()).filter(sound => sound.isActive).length;
+});
 
 /**
  * Calculate speed for each node
@@ -221,6 +249,71 @@ const getNodeStatusClass = (index: number): string => {
     case 'Audio not ready': return 'text-warning-400';
     default: return 'text-error-400';
   }
+};
+
+/**
+ * Get active sounds count for a specific node
+ */
+const getNodeActiveSounds = (index: number): number => {
+  return Array.from(activeSounds.value.values())
+    .filter(sound => sound.nodeIndex === index && sound.isActive).length;
+};
+
+/**
+ * Generate unique sound ID
+ */
+const generateSoundId = (): string => {
+  return `sound_${soundIdCounter.value++}_${Date.now()}`;
+};
+
+/**
+ * Add active sound to tracking
+ */
+const addActiveSound = (nodeIndex: number, duration: number, frequency: number, volume: number): string => {
+  const soundId = generateSoundId();
+  const sound: ActiveSound = {
+    id: soundId,
+    nodeIndex,
+    startTime: performance.now(),
+    duration: duration * 1000, // Convert to milliseconds
+    frequency,
+    volume,
+    isActive: true
+  };
+
+  activeSounds.value.set(soundId, sound);
+
+  // Schedule sound cleanup
+  setTimeout(() => {
+    const sound = activeSounds.value.get(soundId);
+    if (sound) {
+      sound.isActive = false;
+      // Remove after a delay to allow for visual feedback
+      setTimeout(() => {
+        activeSounds.value.delete(soundId);
+      }, 500);
+    }
+  }, duration * 1000);
+
+  return soundId;
+};
+
+/**
+ * Clean up expired sounds
+ */
+const cleanupExpiredSounds = () => {
+  const now = performance.now();
+  const soundsToRemove: string[] = [];
+
+  activeSounds.value.forEach((sound, id) => {
+    if (now - sound.startTime > sound.duration + 500) { // 500ms grace period
+      soundsToRemove.push(id);
+    }
+  });
+
+  soundsToRemove.forEach(id => {
+    activeSounds.value.delete(id);
+  });
 };
 
 /**
@@ -281,11 +374,20 @@ const initializeVisualization = async () => {
       throw new Error('Failed to initialize canvas');
     }
 
+    // Initialize polyphonic synth
+    if (!polyphonicSynth.isInitialized.value) {
+      console.log('Initializing polyphonic synth for visualizer...');
+      await polyphonicSynth.initialize();
+    }
+
     initializeVisualizationNodes();
 
     if (rhythmStore.isPlaying) {
       startAnimation();
     }
+
+    // Start sound cleanup interval
+    soundCleanupInterval.value = window.setInterval(cleanupExpiredSounds, 1000);
 
     isLoading.value = false;
   } catch (err) {
@@ -315,35 +417,55 @@ const stopAnimation = () => {
 };
 
 /**
- * Trigger musical note with enhanced logging and error handling
+ * Trigger polyphonic musical note with enhanced logging and error handling
  */
-const triggerMusicalNote = async (nodeIndex: number, velocity: number = 0.8) => {
-  console.log(`Visualizer V2: Attempting to trigger note for node ${nodeIndex}`);
-  console.log(`Audio initialized: ${audioInitialized.value}`);
-  console.log(`Node config:`, nodeConfigs.value[nodeIndex]);
+const triggerPolyphonicNote = async (nodeIndex: number, velocity: number = 0.8) => {
+  console.log(`Visualizer: Attempting to trigger polyphonic note for node ${nodeIndex}`);
   
   const config = nodeConfigs.value[nodeIndex];
   if (!config) {
-    console.warn(`Visualizer V2: No configuration found for node ${nodeIndex}`);
+    console.warn(`Visualizer: No configuration found for node ${nodeIndex}`);
     return;
   }
   
   if (!config.enabled) {
-    console.log(`Visualizer V2: Node ${nodeIndex} is disabled, skipping`);
+    console.log(`Visualizer: Node ${nodeIndex} is disabled, skipping`);
+    return;
+  }
+
+  // Check if we've reached the maximum simultaneous sounds
+  const currentActiveSounds = Array.from(activeSounds.value.values()).filter(s => s.isActive).length;
+  if (currentActiveSounds >= maxSimultaneousSounds.value) {
+    console.warn(`Visualizer: Maximum simultaneous sounds (${maxSimultaneousSounds.value}) reached, skipping`);
     return;
   }
   
   try {
-    console.log(`Visualizer V2: Triggering note ${config.note}${config.octave} for node ${nodeIndex}`);
-    await triggerNodeNote(nodeIndex, velocity);
-    console.log(`Visualizer V2: Successfully triggered note for node ${nodeIndex}`);
+    // Use polyphonic synth for better sound management
+    if (polyphonicSynth.isInitialized.value) {
+      const frequency = getNodeFrequency(nodeIndex);
+      const duration = config.duration || 0.5;
+      const finalVolume = velocity * config.volume * settings.value.globalVolume;
+
+      console.log(`Visualizer: Triggering polyphonic note ${config.note}${config.octave} (${frequency.toFixed(2)}Hz) for node ${nodeIndex}`);
+      
+      // Add to active sounds tracking
+      const soundId = addActiveSound(nodeIndex, duration, frequency, finalVolume);
+      
+      // Trigger the note with polyphonic synth
+      polyphonicSynth.triggerNote(frequency, duration, finalVolume);
+      
+      console.log(`Visualizer: Successfully triggered polyphonic note for node ${nodeIndex}, sound ID: ${soundId}`);
+    } else {
+      console.warn('Visualizer: Polyphonic synth not initialized');
+    }
   } catch (err) {
-    console.error(`Visualizer V2: Failed to trigger note for node ${nodeIndex}:`, err);
+    console.error(`Visualizer: Failed to trigger polyphonic note for node ${nodeIndex}:`, err);
   }
 };
 
 /**
- * Main animation loop with musical audio integration
+ * Main animation loop with polyphonic musical audio integration
  */
 const animate = (timestamp: number) => {
   if (!context.value || !canvasRef.value) return;
@@ -371,8 +493,8 @@ const animate = (timestamp: number) => {
       node.velocity = -1; // Reverse direction
       hasChanges = true;
 
-      // Trigger musical note for top boundary hit
-      triggerMusicalNote(i, 0.8);
+      // Trigger polyphonic musical note for top boundary hit
+      triggerPolyphonicNote(i, 0.8);
 
       // Emit hit event for top boundary
       emit('node-hit', { 
@@ -388,8 +510,8 @@ const animate = (timestamp: number) => {
       node.velocity = 1; // Reverse direction
       hasChanges = true;
 
-      // Trigger musical note for bottom boundary hit
-      triggerMusicalNote(i, 0.6);
+      // Trigger polyphonic musical note for bottom boundary hit
+      triggerPolyphonicNote(i, 0.6);
 
       // Emit hit event for bottom boundary
       emit('node-hit', { 
@@ -421,7 +543,7 @@ const animate = (timestamp: number) => {
 };
 
 /**
- * Draw all nodes and lines with musical visualization enhancements
+ * Draw all nodes and lines with polyphonic visualization enhancements
  */
 const drawNodes = () => {
   if (!context.value || !canvasRef.value) return;
@@ -445,7 +567,7 @@ const drawNodes = () => {
     ctx.stroke();
   }
 
-  // Draw nodes and lines with musical enhancements
+  // Draw nodes and lines with polyphonic enhancements
   for (let i = 0; i < nodes.value.length; i++) {
     const node = nodes.value[i];
     const nodeConfig = nodeConfigs.value[i];
@@ -453,24 +575,47 @@ const drawNodes = () => {
     // Precise Y calculation: invert position since canvas Y increases downward
     const y = canvas.height * (1 - node.position);
 
-    // Draw vertical line with gradient based on node volume
+    // Get active sounds for this node
+    const nodeActiveSounds = Array.from(activeSounds.value.values())
+      .filter(sound => sound.nodeIndex === i && sound.isActive);
+
+    // Draw vertical line with gradient based on node volume and active sounds
     const volumeIntensity = nodeConfig?.volume || 1.0;
+    const soundIntensity = Math.min(nodeActiveSounds.length / 4, 1); // Max intensity at 4 sounds
+    const totalIntensity = Math.max(volumeIntensity, soundIntensity);
+    
     const gradient = ctx.createLinearGradient(x, 0, x, canvas.height);
-    gradient.addColorStop(0, `rgba(59, 130, 246, ${0.3 * volumeIntensity})`);
-    gradient.addColorStop(0.5, `rgba(59, 130, 246, ${0.1 * volumeIntensity})`);
-    gradient.addColorStop(1, `rgba(59, 130, 246, ${0.3 * volumeIntensity})`);
+    gradient.addColorStop(0, `rgba(59, 130, 246, ${0.3 * totalIntensity})`);
+    gradient.addColorStop(0.5, `rgba(59, 130, 246, ${0.1 * totalIntensity})`);
+    gradient.addColorStop(1, `rgba(59, 130, 246, ${0.3 * totalIntensity})`);
 
     ctx.beginPath();
     ctx.strokeStyle = gradient;
-    ctx.lineWidth = nodeConfig?.enabled ? 2 : 1;
+    ctx.lineWidth = nodeConfig?.enabled ? (2 + soundIntensity * 2) : 1;
     ctx.moveTo(x, 0);
     ctx.lineTo(x, canvas.height);
     ctx.stroke();
+
+    // Draw polyphonic sound waves around active nodes
+    if (nodeActiveSounds.length > 0) {
+      nodeActiveSounds.forEach((sound, soundIndex) => {
+        const age = (performance.now() - sound.startTime) / sound.duration;
+        const radius = 20 + (age * 40); // Expanding circle
+        const opacity = Math.max(0, 1 - age); // Fading out
+        
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(147, 51, 234, ${opacity * 0.6})`; // Purple for polyphonic
+        ctx.lineWidth = 2;
+        ctx.arc(x, y, radius + (soundIndex * 10), 0, Math.PI * 2);
+        ctx.stroke();
+      });
+    }
 
     // Draw node with enhanced visuals
     const isHovered = i === hoveredNode.value;
     const isActive = Math.abs(node.velocity) > 0.5;
     const isEnabled = nodeConfig?.enabled !== false;
+    const hasActiveSounds = nodeActiveSounds.length > 0;
 
     // Skip visual effects for disabled nodes
     if (!isEnabled) {
@@ -482,22 +627,29 @@ const drawNodes = () => {
       continue;
     }
 
-    // Outer glow for active nodes
-    if (isActive || isHovered) {
+    // Outer glow for active nodes or nodes with active sounds
+    if (isActive || isHovered || hasActiveSounds) {
       ctx.beginPath();
-      const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, CANVAS_CONSTANTS.NODE_RADIUS + 8);
-      glowGradient.addColorStop(0, isHovered ? 'rgba(217, 70, 239, 0.6)' : 'rgba(59, 130, 246, 0.4)');
+      const glowIntensity = hasActiveSounds ? 0.8 : 0.4;
+      const glowColor = hasActiveSounds ? 'rgba(147, 51, 234, 0.6)' : // Purple for active sounds
+                       isHovered ? 'rgba(217, 70, 239, 0.6)' : 'rgba(59, 130, 246, 0.4)';
+      const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, CANVAS_CONSTANTS.NODE_RADIUS + 12);
+      glowGradient.addColorStop(0, glowColor);
       glowGradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
       ctx.fillStyle = glowGradient;
-      ctx.arc(x, y, CANVAS_CONSTANTS.NODE_RADIUS + 8, 0, Math.PI * 2);
+      ctx.arc(x, y, CANVAS_CONSTANTS.NODE_RADIUS + 12, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Main node with color based on musical note
+    // Main node with color based on musical note and active sounds
     ctx.beginPath();
     const nodeGradient = ctx.createRadialGradient(x - 2, y - 2, 0, x, y, CANVAS_CONSTANTS.NODE_RADIUS);
     
-    if (isHovered) {
+    if (hasActiveSounds) {
+      // Purple gradient for nodes with active sounds
+      nodeGradient.addColorStop(0, '#c084fc');
+      nodeGradient.addColorStop(1, '#9333ea');
+    } else if (isHovered) {
       nodeGradient.addColorStop(0, '#f0abfc');
       nodeGradient.addColorStop(1, '#d946ef');
     } else {
@@ -509,36 +661,46 @@ const drawNodes = () => {
     }
     
     ctx.fillStyle = nodeGradient;
-    ctx.arc(x, y, CANVAS_CONSTANTS.NODE_RADIUS, 0, Math.PI * 2);
+    const nodeRadius = CANVAS_CONSTANTS.NODE_RADIUS + (hasActiveSounds ? nodeActiveSounds.length * 2 : 0);
+    ctx.arc(x, y, nodeRadius, 0, Math.PI * 2);
     ctx.fill();
 
     // Node border
     ctx.beginPath();
-    ctx.strokeStyle = isHovered ? 'rgba(217, 70, 239, 0.8)' : 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 2;
-    ctx.arc(x, y, CANVAS_CONSTANTS.NODE_RADIUS, 0, Math.PI * 2);
+    ctx.strokeStyle = hasActiveSounds ? 'rgba(147, 51, 234, 0.8)' :
+                     isHovered ? 'rgba(217, 70, 239, 0.8)' : 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = hasActiveSounds ? 3 : 2;
+    ctx.arc(x, y, nodeRadius, 0, Math.PI * 2);
     ctx.stroke();
 
     // Volume indicator (inner circle)
     if (nodeConfig) {
       ctx.beginPath();
       ctx.fillStyle = `rgba(255, 255, 255, ${nodeConfig.volume * 0.8})`;
-      ctx.arc(x, y, CANVAS_CONSTANTS.NODE_RADIUS * nodeConfig.volume * 0.6, 0, Math.PI * 2);
+      ctx.arc(x, y, nodeRadius * nodeConfig.volume * 0.6, 0, Math.PI * 2);
       ctx.fill();
     }
 
     // Audio status indicator (small dot)
     ctx.beginPath();
     ctx.fillStyle = audioInitialized.value ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)';
-    ctx.arc(x + CANVAS_CONSTANTS.NODE_RADIUS - 3, y - CANVAS_CONSTANTS.NODE_RADIUS + 3, 2, 0, Math.PI * 2);
+    ctx.arc(x + nodeRadius - 3, y - nodeRadius + 3, 2, 0, Math.PI * 2);
     ctx.fill();
+
+    // Active sounds counter
+    if (nodeActiveSounds.length > 0) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(nodeActiveSounds.length.toString(), x + nodeRadius - 6, y - nodeRadius + 6);
+    }
 
     // Note label
     if (nodeConfig && isHovered) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
       ctx.font = '10px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(getNodeDisplayNote(i), x, y - CANVAS_CONSTANTS.NODE_RADIUS - 8);
+      ctx.fillText(getNodeDisplayNote(i), x, y - nodeRadius - 8);
     }
   }
 };
@@ -589,12 +751,12 @@ const handleMouseLeave = () => {
 };
 
 /**
- * Handle canvas click to test notes
+ * Handle canvas click to test polyphonic notes
  */
 const handleCanvasClick = (event: MouseEvent) => {
   if (hoveredNode.value !== null) {
     console.log(`Canvas clicked on node ${hoveredNode.value}`);
-    triggerMusicalNote(hoveredNode.value, 0.8);
+    triggerPolyphonicNote(hoveredNode.value, 0.8);
   }
 };
 
@@ -641,6 +803,8 @@ watch(() => rhythmStore.currentTime, (newTime, oldTime) => {
   // Detect reset when currentTime goes from positive to 0
   if (oldTime > 0 && newTime === 0) {
     resetNodes();
+    // Clear all active sounds on reset
+    activeSounds.value.clear();
     if (!rhythmStore.isPlaying) {
       drawNodes();
     }
@@ -649,7 +813,7 @@ watch(() => rhythmStore.currentTime, (newTime, oldTime) => {
 
 // Watch for audio initialization changes
 watch(audioInitialized, (newValue) => {
-  console.log(`Visualizer V2: Audio initialized changed to ${newValue}`);
+  console.log(`Visualizer: Audio initialized changed to ${newValue}`);
   isDirty.value = true;
   if (!rhythmStore.isPlaying) {
     drawNodes();
@@ -663,5 +827,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopAnimation();
+  if (soundCleanupInterval.value) {
+    clearInterval(soundCleanupInterval.value);
+  }
+  // Clear all active sounds
+  activeSounds.value.clear();
 });
 </script>
