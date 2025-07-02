@@ -99,6 +99,16 @@
             <!-- Controls Panel -->
             <aside class="xl:col-span-4 space-y-6" aria-label="Control panel">
 
+              <!-- Polyphonic FM Synthesizer Instrument -->
+              <div class="animate-fade-in" style="animation-delay: 0.3s">
+                <ClientOnly>
+                  <template #fallback>
+                    <div class="h-96 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 animate-pulse"></div>
+                  </template>
+                  <PolyphonicFMSynthInstrument />
+                </ClientOnly>
+              </div>
+
               <!-- Audio Controls V3 -->
               <div class="animate-fade-in" style="animation-delay: 0.4s">
                 <ClientOnly>
@@ -147,7 +157,7 @@
           <div class="container mx-auto px-4 text-center">
             <div class="border-t border-white/10 pt-8">
               <p class="text-secondary-400 text-sm">
-                Built with Vue 3, Nuxt 3, Musical Scales, and Advanced FM Synthesis
+                Built with Vue 3, Nuxt 3, Musical Scales, and Advanced Polyphonic FM Synthesis
               </p>
             </div>
           </div>
@@ -167,14 +177,15 @@ import {
 import { useRhythmStore } from '~/stores/rhythmStore';
 import { useErrorHandler } from '~/composables/useErrorHandler';
 import { setupGlobalFMSynthAutoInit } from '~/composables/useGlobalFMSynth';
+import { setupPolyphonicFMSynthAutoInit } from '~/composables/usePolyphonicFMSynth';
 import type { NodeHitEvent } from '~/types';
 
 // Set page metadata
 useHead({
-  title: 'Musical Polyrhythm Generator - Interactive Music Creation with FM Synthesis',
+  title: 'Musical Polyrhythm Generator - Interactive Music Creation with Polyphonic FM Synthesis',
   meta: [
-    { name: 'description', content: 'Create and visualize complex polyrhythmic patterns with musical scales, FM synthesis, and interactive audio visualization' },
-    { name: 'keywords', content: 'polyrhythm, music, rhythm, generator, visualization, audio, synthesis, musical scales, notes, interactive, FM synthesis' },
+    { name: 'description', content: 'Create and visualize complex polyrhythmic patterns with musical scales, polyphonic FM synthesis, and interactive audio visualization' },
+    { name: 'keywords', content: 'polyrhythm, music, rhythm, generator, visualization, audio, synthesis, musical scales, notes, interactive, polyphonic, FM synthesis' },
     { name: 'theme-color', content: '#1e293b' }
   ],
   link: [
@@ -217,6 +228,9 @@ const initializeApplication = async () => {
     
     // Setup global FM synth auto-initialization
     setupGlobalFMSynthAutoInit();
+    
+    // Setup polyphonic FM synth auto-initialization
+    setupPolyphonicFMSynthAutoInit();
     
     isInitialized.value = true;
   } catch (err) {

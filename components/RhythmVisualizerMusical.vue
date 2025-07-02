@@ -122,7 +122,7 @@
         <div>Scale: <span class="text-primary-400">{{ currentScaleInfo }}</span></div>
         <div>Nodes: <span class="text-accent-400">{{ nodeCount }}</span></div>
         <div>Audio: <span :class="audioInitialized ? 'text-success-400' : 'text-warning-400'">
-          {{ audioInitialized ? 'FM Synth Ready' : 'FM Synth Not Ready' }}
+          {{ audioInitialized ? 'Polyphonic Ready' : 'Polyphonic Not Ready' }}
         </span></div>
       </div>
     </div>
@@ -132,7 +132,7 @@
       v-if="hoveredNode !== null"
       class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-xs text-secondary-400 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/10"
     >
-      Click to test note • {{ audioInitialized ? 'FM Synth Ready' : 'FM Synth Not Ready' }}
+      Click to test note • {{ audioInitialized ? 'Polyphonic Ready' : 'Polyphonic Not Ready' }}
     </div>
   </div>
 </template>
@@ -144,7 +144,7 @@ import { useRhythmStore } from '~/stores/rhythmStore';
 import { useCanvas } from '~/composables/useCanvas';
 import { useErrorHandler } from '~/composables/useErrorHandler';
 import { useMusicalAudio } from '~/composables/useMusicalAudio';
-import { useGlobalFMSynth } from '~/composables/useGlobalFMSynth';
+import { usePolyphonicFMSynth } from '~/composables/usePolyphonicFMSynth';
 import { CANVAS_CONSTANTS } from '~/constants';
 import type { CanvasNode, NodeHitEvent } from '~/types';
 
@@ -160,8 +160,8 @@ const {
   initializeNodes
 } = useMusicalAudio();
 
-// Use the global FM synth for consistent audio
-const globalFMSynth = useGlobalFMSynth();
+// Use the polyphonic FM synth for consistent audio
+const polyphonicFMSynth = usePolyphonicFMSynth();
 
 // Component state
 const isLoading = ref(true);
@@ -188,8 +188,8 @@ const currentScaleInfo = computed(() => {
   return `${settings.value.rootNote} ${settings.value.scaleType}`;
 });
 
-// Use global FM synth state
-const audioInitialized = computed(() => globalFMSynth.isInitialized.value);
+// Use polyphonic FM synth state
+const audioInitialized = computed(() => polyphonicFMSynth.isInitialized.value);
 
 /**
  * Calculate speed for each node
@@ -212,7 +212,7 @@ const getNodeStatus = (index: number): string => {
   const config = nodeConfigs.value[index];
   if (!config) return 'Not configured';
   if (!config.enabled) return 'Disabled';
-  if (!audioInitialized.value) return 'FM Synth not ready';
+  if (!audioInitialized.value) return 'Polyphonic synth not ready';
   return 'Ready';
 };
 
@@ -224,7 +224,7 @@ const getNodeStatusClass = (index: number): string => {
   switch (status) {
     case 'Ready': return 'text-success-400';
     case 'Disabled': return 'text-warning-400';
-    case 'FM Synth not ready': return 'text-warning-400';
+    case 'Polyphonic synth not ready': return 'text-warning-400';
     default: return 'text-error-400';
   }
 };
@@ -321,15 +321,15 @@ const stopAnimation = () => {
 };
 
 /**
- * Trigger musical note using the global FM synth
+ * Trigger musical note using the polyphonic FM synth
  */
 const triggerMusicalNote = (nodeIndex: number, velocity: number = 0.8) => {
   // console.log(`Visualizer: Attempting to trigger note for node ${nodeIndex}`);
-  // console.log(`FM Synth initialized: ${audioInitialized.value}`);
+  // console.log(`Polyphonic FM Synth initialized: ${audioInitialized.value}`);
   // console.log(`Node config:`, nodeConfigs.value[nodeIndex]);
 
   if (!audioInitialized.value) {
-    console.warn(`Visualizer: Global FM Synth not initialized, cannot play note for node ${nodeIndex}`);
+    console.warn(`Visualizer: Polyphonic FM Synth not initialized, cannot play note for node ${nodeIndex}`);
     return;
   }
 
@@ -349,14 +349,14 @@ const triggerMusicalNote = (nodeIndex: number, velocity: number = 0.8) => {
     const frequency = getNodeFrequency(nodeIndex);
     const finalVelocity = velocity * config.volume;
     
-    // console.log(`Visualizer: Triggering FM synth note ${config.note}${config.octave} (${frequency.toFixed(1)}Hz) for node ${nodeIndex}`);
+    // console.log(`Visualizer: Triggering polyphonic FM synth note ${config.note}${config.octave} (${frequency.toFixed(1)}Hz) for node ${nodeIndex}`);
     
-    // Use the global FM synth to play the note
-    globalFMSynth.triggerNote(frequency, '8n', finalVelocity);
+    // Use the polyphonic FM synth to play the note
+    polyphonicFMSynth.triggerNote(frequency, config.duration, finalVelocity);
     
-    // console.log(`Visualizer: Successfully triggered FM synth note for node ${nodeIndex}`);
+    // console.log(`Visualizer: Successfully triggered polyphonic FM synth note for node ${nodeIndex}`);
   } catch (err) {
-    console.error(`Visualizer: Failed to trigger FM synth note for node ${nodeIndex}:`, err);
+    console.error(`Visualizer: Failed to trigger polyphonic FM synth note for node ${nodeIndex}:`, err);
   }
 };
 
@@ -389,7 +389,7 @@ const animate = (timestamp: number) => {
       node.velocity = -1; // Reverse direction
       hasChanges = true;
 
-      // Trigger musical note for top boundary hit using global FM synth
+      // Trigger musical note for top boundary hit using polyphonic FM synth
       triggerMusicalNote(i, 0.8);
 
       // Emit hit event for top boundary
@@ -406,7 +406,7 @@ const animate = (timestamp: number) => {
       node.velocity = 1; // Reverse direction
       hasChanges = true;
 
-      // Trigger musical note for bottom boundary hit using global FM synth
+      // Trigger musical note for bottom boundary hit using polyphonic FM synth
       triggerMusicalNote(i, 0.6);
 
       // Emit hit event for bottom boundary
@@ -545,7 +545,7 @@ const drawNodes = () => {
       ctx.fill();
     }
 
-    // Audio status indicator (small dot) - now shows FM synth status
+    // Audio status indicator (small dot) - now shows polyphonic FM synth status
     ctx.beginPath();
     ctx.fillStyle = audioInitialized.value ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)';
     ctx.arc(x + CANVAS_CONSTANTS.NODE_RADIUS - 3, y - CANVAS_CONSTANTS.NODE_RADIUS + 3, 2, 0, Math.PI * 2);
@@ -607,7 +607,7 @@ const handleMouseLeave = () => {
 };
 
 /**
- * Handle canvas click to test notes using global FM synth
+ * Handle canvas click to test notes using polyphonic FM synth
  */
 const handleCanvasClick = (event: MouseEvent) => {
   if (hoveredNode.value !== null) {
@@ -665,9 +665,9 @@ watch(() => rhythmStore.currentTime, (newTime, oldTime) => {
   }
 });
 
-// Watch for global FM synth initialization changes
+// Watch for polyphonic FM synth initialization changes
 watch(audioInitialized, (newValue) => {
-  console.log(`Visualizer: Global FM Synth initialized changed to ${newValue}`);
+  console.log(`Visualizer: Polyphonic FM Synth initialized changed to ${newValue}`);
   isDirty.value = true;
   if (!rhythmStore.isPlaying) {
     drawNodes();
