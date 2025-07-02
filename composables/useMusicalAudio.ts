@@ -1,6 +1,6 @@
 import { ref, computed, onUnmounted, readonly, watch, onMounted } from 'vue';
 import { useErrorHandler } from './useErrorHandler';
-import { useAudioV3 } from './useAudioV3';
+import { useGlobalFMSynth } from './useGlobalFMSynth';
 import { useAudioStore } from '~/stores/audioStore';
 import { useRhythmStore } from '~/stores/rhythmStore';
 import { useMusicalStore } from '~/stores/musicalStore';
@@ -51,8 +51,8 @@ export interface MusicalAudioSettings {
 export function useMusicalAudio() {
   const { handleError } = useErrorHandler();
 
-  // Get the V3 audio system instance
-  const audioV3 = useAudioV3();
+  // Get the global FM synth instance for consistent audio
+  const globalFMSynth = useGlobalFMSynth();
 
   // Get the rhythm store for node count
   const rhythmStore = useRhythmStore();
@@ -66,69 +66,15 @@ export function useMusicalAudio() {
   // Import the audio store for synth settings
   const audioStore = useAudioStore();
 
-  // Hydrate persisted audio settings from localStorage
-  if (typeof window !== 'undefined') {
-    const savedSynth = localStorage.getItem('synthSettings');
-    if (savedSynth) audioStore.$patch({ synthSettings: JSON.parse(savedSynth) });
-    const savedReverb = localStorage.getItem('reverbSettings');
-    if (savedReverb) audioStore.$patch({ reverbSettings: JSON.parse(savedReverb) });
-    const savedVol = localStorage.getItem('masterVolume');
-    if (savedVol) audioStore.updateMasterVolume(parseFloat(savedVol));
-  }
-
-  // Apply initial synth settings on mount
-  onMounted(() => {
-    applyCurrentSynthSettings();
-  });
-
-  // Function to apply current synth settings from store
-  const applyCurrentSynthSettings = () => {
-    // Combine synth settings with effects settings for Tone.js
-    const fullSettings = {
-      ...audioStore.synthSettings,
-      reverb: audioStore.reverbSettings
-    };
-
-    // Apply settings to the audio engine
-    audioV3.updateSynthParams(fullSettings);
-    console.log('Applied synth settings:', fullSettings);
-  };
-
-  // Watch for changes in synth settings and apply them
-  watch(() => audioStore.synthSettings, () => {
-    applyCurrentSynthSettings();
-  }, { deep: true });
-
-  // Persist synth settings to localStorage on change
-  watch(() => audioStore.synthSettings, (newVal) => {
-    localStorage.setItem('synthSettings', JSON.stringify(newVal));
-  }, { deep: true });
-
-  // Watch for changes in reverb settings and apply them
-  watch(() => audioStore.reverbSettings, () => {
-    applyCurrentSynthSettings();
-  }, { deep: true });
-
-  // Persist reverb settings to localStorage on change
-  watch(() => audioStore.reverbSettings, (newVal) => {
-    localStorage.setItem('reverbSettings', JSON.stringify(newVal));
-  }, { deep: true });
-
-  // Watch for master volume changes: apply to audio engine and persist
-  watch(() => audioStore.masterVolume, (newVal) => {
-    audioV3.setVolume(newVal);
-    localStorage.setItem('masterVolume', JSON.stringify(newVal));
-  });
-
   // Node configurations from the store
   const nodeConfigs = computed(() => musicalStore.nodeConfigs);
   const nodeCount = computed(() => nodeConfigs.value.length);
 
-  // Create reactive computed properties that directly reference the V3 system
-  const isInitialized = computed(() => audioV3.isInitialized.value);
-  const isInitializing = computed(() => audioV3.isInitializing.value);
-  const currentVolume = computed(() => audioV3.currentVolume.value);
-  const initializationError = computed(() => audioV3.initializationError.value);
+  // Create reactive computed properties that directly reference the global FM synth
+  const isInitialized = computed(() => globalFMSynth.isInitialized.value);
+  const isInitializing = computed(() => globalFMSynth.isInitializing.value);
+  const currentVolume = computed(() => 1.0); // FM synth doesn't expose volume directly
+  const initializationError = computed(() => globalFMSynth.error.value);
 
   /**
    * Initialize node configurations
@@ -309,7 +255,7 @@ export function useMusicalAudio() {
   };
 
   /**
-   * Trigger note for specific node with enhanced error handling and logging
+   * Trigger note for specific node using the global FM synth
    */
   const triggerNodeNote = (nodeIndex: number, velocity: number = 0.8) => {
     // console.log(`Musical audio: triggerNodeNote called for node ${nodeIndex}, velocity ${velocity}`);
@@ -330,9 +276,9 @@ export function useMusicalAudio() {
       return;
     }
 
-    // Check if audio system is available using the computed property
+    // Check if global FM synth is available
     if (!isInitialized.value) {
-      console.warn(`Musical audio: V3 audio system not initialized (${isInitialized.value}), cannot play note`);
+      console.warn(`Musical audio: Global FM Synth not initialized (${isInitialized.value}), cannot play note`);
       return;
     }
 
@@ -342,9 +288,8 @@ export function useMusicalAudio() {
 
       // console.log(`Musical audio: Playing ${config.note}${config.octave} (${frequency.toFixed(2)}Hz) at ${(rawVolume * 100).toFixed(0)}% volume`);
 
-      // Use the V3 audio system to play the note with master volume applied
-      const adjustedVolume = rawVolume * audioStore.masterVolume;
-      audioV3.triggerNote(frequency, config.duration.toString(), adjustedVolume);
+      // Use the global FM synth to play the note
+      globalFMSynth.triggerNote(frequency, config.duration.toString(), rawVolume);
 
       // console.log(`Musical audio: Successfully triggered node ${nodeIndex}: ${config.note}${config.octave}`);
     } catch (error) {
@@ -488,23 +433,18 @@ export function useMusicalAudio() {
     initializeNodes(newCount);
   });
 
-  // Watch for audio system initialization changes and log them
+  // Watch for global FM synth initialization changes and log them
   watch(isInitialized, (newValue, oldValue) => {
-    console.log(`Musical audio: V3 system initialization changed from ${oldValue} to ${newValue}`);
+    console.log(`Musical audio: Global FM Synth initialization changed from ${oldValue} to ${newValue}`);
     if (newValue) {
-      console.log('Musical audio system: V3 audio system is now available');
+      console.log('Musical audio system: Global FM Synth is now available');
     } else {
-      console.log('Musical audio system: V3 audio system is not available');
+      console.log('Musical audio system: Global FM Synth is not available');
     }
   }, { immediate: true });
 
-  // Also watch the raw V3 system state for debugging
-  watch(() => audioV3.isInitialized.value, (newValue) => {
-    console.log(`Musical audio: Raw V3 isInitialized = ${newValue}`);
-  }, { immediate: true });
-
   return {
-    // State - use computed properties that directly reference V3 system
+    // State - use computed properties that directly reference global FM synth
     settings: readonly(settings),
     nodeConfigs: readonly(nodeConfigs),
     nodeCount: readonly(nodeCount),
@@ -537,19 +477,22 @@ export function useMusicalAudio() {
     currentVolume,
     initializationError,
 
-    // Direct V3 methods
-    initializeAudioSystem: audioV3.initializeAudioSystem,
-    setVolume: audioV3.setVolume,
-    getProviderStatus: audioV3.getProviderStatus,
-    restartAudioSystem: audioV3.restartAudioSystem,
-    dispose: audioV3.dispose,
+    // Direct global FM synth methods
+    initializeAudioSystem: globalFMSynth.initialize,
+    setVolume: () => {}, // FM synth doesn't expose volume directly
+    getProviderStatus: () => ({ 
+      name: 'Global FM Synth', 
+      status: isInitialized.value ? 'ready' : 'not ready' 
+    }),
+    restartAudioSystem: globalFMSynth.initialize,
+    dispose: globalFMSynth.dispose,
 
     // Legacy compatibility - also use computed properties
     isContextStarted: isInitialized,
-    startAudioContext: audioV3.startAudioContext,
-    setReverbWet: audioV3.setReverbWet,
-    setDelayWet: audioV3.setDelayWet,
-    updateSynthParams: audioV3.updateSynthParams,
-    getContextState: audioV3.getContextState
+    startAudioContext: globalFMSynth.initialize,
+    setReverbWet: globalFMSynth.updateReverb,
+    setDelayWet: () => {}, // Not supported by FM synth
+    updateSynthParams: globalFMSynth.setParameters,
+    getContextState: () => isInitialized.value ? 'running' : 'suspended'
   };
 }

@@ -146,7 +146,7 @@
           <div class="container mx-auto px-4 text-center">
             <div class="border-t border-white/10 pt-8">
               <p class="text-secondary-400 text-sm">
-                Built with Vue 3, Nuxt 3, Musical Scales, and Advanced Audio Architecture
+                Built with Vue 3, Nuxt 3, Musical Scales, and Advanced FM Synthesis
               </p>
             </div>
           </div>
@@ -165,14 +165,15 @@ import {
 } from '@heroicons/vue/24/outline';
 import { useRhythmStore } from '~/stores/rhythmStore';
 import { useErrorHandler } from '~/composables/useErrorHandler';
+import { setupGlobalFMSynthAutoInit } from '~/composables/useGlobalFMSynth';
 import type { NodeHitEvent } from '~/types';
 
 // Set page metadata
 useHead({
-  title: 'Musical Polyrhythm Generator - Interactive Music Creation with Scales',
+  title: 'Musical Polyrhythm Generator - Interactive Music Creation with FM Synthesis',
   meta: [
-    { name: 'description', content: 'Create and visualize complex polyrhythmic patterns with musical scales, individual note assignment, and interactive audio visualization' },
-    { name: 'keywords', content: 'polyrhythm, music, rhythm, generator, visualization, audio, synthesis, musical scales, notes, interactive' },
+    { name: 'description', content: 'Create and visualize complex polyrhythmic patterns with musical scales, FM synthesis, and interactive audio visualization' },
+    { name: 'keywords', content: 'polyrhythm, music, rhythm, generator, visualization, audio, synthesis, musical scales, notes, interactive, FM synthesis' },
     { name: 'theme-color', content: '#1e293b' }
   ],
   link: [
@@ -196,7 +197,7 @@ const handleNodeHit = (event: NodeHitEvent) => {
     // Log the event for debugging
     // console.log('Musical node hit:', event);
     
-    // Audio is now handled directly in the RhythmVisualizerMusical component
+    // Audio is now handled directly in the RhythmVisualizerMusical component using global FM synth
     // This event can be used for additional visual effects or analytics
   } catch (err) {
     handleError(err as Error, 'Failed to handle musical node hit');
@@ -213,7 +214,8 @@ const initializeApplication = async () => {
     // Initialize stores
     rhythmStore.initialize();
     
-    // Audio initialization is handled by the useMusicalAudio composable
+    // Setup global FM synth auto-initialization
+    setupGlobalFMSynthAutoInit();
     
     isInitialized.value = true;
   } catch (err) {

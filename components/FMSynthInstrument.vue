@@ -24,7 +24,7 @@
       <div class="flex items-center space-x-3 mb-3">
         <InformationCircleIcon class="w-5 h-5 text-info-400 flex-shrink-0" />
         <div class="text-info-200 text-sm">
-          Click to initialize the FM Synthesizer
+          Click to initialize the FM Synthesizer (used by all audio components)
         </div>
       </div>
       <button
@@ -34,7 +34,7 @@
       >
         <span v-if="!isInitializing" class="flex items-center justify-center space-x-2">
           <PlayIcon class="w-4 h-4" />
-          <span>Initialize FM Synth</span>
+          <span>Initialize Global FM Synth</span>
         </span>
         <span v-else class="flex items-center justify-center space-x-2">
           <LoadingSpinner size="sm" color="white" />
@@ -100,7 +100,7 @@
             min="0.01"
             max="2"
             step="0.01"
-            v-model.number="parameters.attack"
+            :value="parameters.attack"
             @input="updateAttack"
             class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
           />
@@ -121,7 +121,7 @@
             min="0.1"
             max="4"
             step="0.1"
-            v-model.number="parameters.release"
+            :value="parameters.release"
             @input="updateRelease"
             class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
           />
@@ -147,7 +147,7 @@
           <div class="relative">
             <select
               id="oscillator-type"
-              v-model="parameters.oscillatorType"
+              :value="parameters.oscillatorType"
               @change="updateOscillatorType"
               class="w-full bg-secondary-700/50 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-all duration-200 appearance-none cursor-pointer hover:bg-secondary-700/70"
             >
@@ -179,7 +179,7 @@
             min="0"
             max="1"
             step="0.01"
-            v-model.number="parameters.reverb"
+            :value="parameters.reverb"
             @input="updateReverb"
             class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-success-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
           />
@@ -241,17 +241,17 @@
 
         <div class="grid grid-cols-2 gap-3">
           <button
-            @click="saveCurrentAsPreset"
-            class="px-4 py-2 bg-secondary-600 hover:bg-secondary-700 text-white rounded-lg transition-colors duration-200 text-sm"
-          >
-            Save Current
-          </button>
-          
-          <button
             @click="resetToDefault"
             class="px-4 py-2 bg-secondary-600 hover:bg-secondary-700 text-white rounded-lg transition-colors duration-200 text-sm"
           >
             Reset
+          </button>
+          
+          <button
+            @click="saveCurrentSettings"
+            class="px-4 py-2 bg-secondary-600 hover:bg-secondary-700 text-white rounded-lg transition-colors duration-200 text-sm"
+          >
+            Save Settings
           </button>
         </div>
       </div>
@@ -271,7 +271,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue';
+import { computed } from 'vue';
 import { 
   MusicalNoteIcon, 
   PlayIcon,
@@ -284,251 +284,82 @@ import {
   BookmarkIcon,
   ChevronDownIcon
 } from '@heroicons/vue/24/outline';
+import { useGlobalFMSynth } from '~/composables/useGlobalFMSynth';
 
-// Tone.js types and interfaces
-interface SynthParameters {
-  attack: number;
-  release: number;
-  reverb: number;
-  oscillatorType: 'sine' | 'square' | 'triangle' | 'sawtooth';
-}
+// Use the global FM synth instance
+const globalSynth = useGlobalFMSynth();
 
-interface PresetData {
-  name: string;
-  parameters: SynthParameters;
-}
-
-// Component state
-const isInitialized = ref(false);
-const isInitializing = ref(false);
-const error = ref<string>('');
-
-// Tone.js instances
-let Tone: any = null;
-let fmSynth: any = null;
-let reverb: any = null;
-let masterVolume: any = null;
-
-// Default parameters
-const defaultParameters: SynthParameters = {
-  attack: 0.1,
-  release: 0.5,
-  reverb: 0.3,
-  oscillatorType: 'sine'
-};
-
-// Reactive parameters
-const parameters = reactive<SynthParameters>({ ...defaultParameters });
+// Computed properties from global synth
+const isInitialized = computed(() => globalSynth.isInitialized.value);
+const isInitializing = computed(() => globalSynth.isInitializing.value);
+const error = computed(() => globalSynth.error.value);
+const parameters = computed(() => globalSynth.parameters);
 
 // Test notes
 const testNotes = ['C4', 'E4', 'G4', 'C5'];
 
-// Presets
-const presets: { [key: string]: PresetData } = {
-  default: {
-    name: 'Default',
-    parameters: { attack: 0.1, release: 0.5, reverb: 0.3, oscillatorType: 'sine' }
-  },
-  bright: {
-    name: 'Bright',
-    parameters: { attack: 0.01, release: 0.2, reverb: 0.1, oscillatorType: 'square' }
-  },
-  warm: {
-    name: 'Warm',
-    parameters: { attack: 0.3, release: 1.5, reverb: 0.6, oscillatorType: 'triangle' }
-  }
+// Built-in presets
+const presets = {
+  default: { attack: 0.1, release: 0.5, reverb: 0.3, oscillatorType: 'sine' as const },
+  bright: { attack: 0.01, release: 0.2, reverb: 0.1, oscillatorType: 'square' as const },
+  warm: { attack: 0.3, release: 1.5, reverb: 0.6, oscillatorType: 'triangle' as const }
 };
 
 /**
  * Initialize the FM Synthesizer
  */
 const initializeSynth = async () => {
-  if (isInitializing.value) return;
-  
-  isInitializing.value = true;
-  error.value = '';
-
-  try {
-    console.log('Initializing FM Synthesizer...');
-
-    // Load Tone.js with timeout
-    const loadPromise = import('tone');
-    const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Tone.js load timeout')), 5000)
-    );
-
-    Tone = await Promise.race([loadPromise, timeoutPromise]);
-    console.log('Tone.js loaded successfully');
-
-    // Start audio context
-    if (Tone.context.state !== 'running') {
-      await Tone.start();
-      console.log('Tone.js context started');
-    }
-
-    // Create master volume control
-    masterVolume = new Tone.Volume(-6).toDestination();
-
-    // Create reverb effect
-    reverb = new Tone.Reverb({
-      decay: 2.5,
-      wet: parameters.reverb
-    }).connect(masterVolume);
-
-    // Wait for reverb to generate its impulse response
-    await reverb.generate();
-
-    // Create FM Synthesizer with default parameters
-    fmSynth = new Tone.FMSynth({
-      harmonicity: 3,
-      modulationIndex: 10,
-      oscillator: { 
-        type: parameters.oscillatorType 
-      },
-      envelope: { 
-        attack: parameters.attack, 
-        decay: 0.1, 
-        sustain: 0.3, 
-        release: parameters.release 
-      },
-      modulation: { 
-        type: 'square' 
-      },
-      modulationEnvelope: { 
-        attack: 0.02, 
-        decay: 0.1, 
-        sustain: 0.3, 
-        release: 0.2 
-      }
-    });
-
-    // Connect synth through effects chain
-    fmSynth.connect(reverb);
-
-    isInitialized.value = true;
-    console.log('FM Synthesizer initialized successfully');
-
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-    error.value = `Failed to initialize FM Synthesizer: ${errorMessage}`;
-    console.error('FM Synthesizer initialization failed:', err);
-    
-    // Cleanup on error
-    disposeSynth();
-  } finally {
-    isInitializing.value = false;
-  }
+  await globalSynth.initialize();
 };
 
 /**
  * Update attack parameter
  */
-const updateAttack = () => {
-  if (!fmSynth || !isInitialized.value) return;
-  
-  try {
-    const clampedAttack = Math.max(0.01, Math.min(2, parameters.attack));
-    fmSynth.envelope.attack = clampedAttack;
-    console.log(`Updated attack to: ${clampedAttack}s`);
-  } catch (err) {
-    console.warn('Failed to update attack:', err);
-  }
+const updateAttack = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  globalSynth.updateAttack(parseFloat(target.value));
 };
 
 /**
  * Update release parameter
  */
-const updateRelease = () => {
-  if (!fmSynth || !isInitialized.value) return;
-  
-  try {
-    const clampedRelease = Math.max(0.1, Math.min(4, parameters.release));
-    fmSynth.envelope.release = clampedRelease;
-    console.log(`Updated release to: ${clampedRelease}s`);
-  } catch (err) {
-    console.warn('Failed to update release:', err);
-  }
+const updateRelease = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  globalSynth.updateRelease(parseFloat(target.value));
 };
 
 /**
  * Update oscillator type
  */
-const updateOscillatorType = () => {
-  if (!fmSynth || !isInitialized.value) return;
-  
-  try {
-    fmSynth.oscillator.type = parameters.oscillatorType;
-    console.log(`Updated oscillator type to: ${parameters.oscillatorType}`);
-  } catch (err) {
-    console.warn('Failed to update oscillator type:', err);
-  }
+const updateOscillatorType = (event: Event) => {
+  const target = event.target as HTMLSelectElement;
+  globalSynth.updateOscillatorType(target.value as any);
 };
 
 /**
  * Update reverb amount
  */
-const updateReverb = () => {
-  if (!reverb || !isInitialized.value) return;
-  
-  try {
-    const clampedReverb = Math.max(0, Math.min(1, parameters.reverb));
-    reverb.wet.value = clampedReverb;
-    console.log(`Updated reverb to: ${clampedReverb}`);
-  } catch (err) {
-    console.warn('Failed to update reverb:', err);
-  }
+const updateReverb = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  globalSynth.updateReverb(parseFloat(target.value));
 };
 
 /**
  * Play a test note
  */
 const playTestNote = (note: string) => {
-  if (!fmSynth || !isInitialized.value) return;
-  
-  try {
-    fmSynth.triggerAttackRelease(note, '8n');
-    console.log(`Played test note: ${note}`);
-  } catch (err) {
-    console.warn('Failed to play test note:', err);
-  }
+  globalSynth.triggerNote(note, '8n', 0.8);
 };
 
 /**
  * Load a preset
  */
-const loadPreset = (presetName: string) => {
+const loadPreset = (presetName: keyof typeof presets) => {
   const preset = presets[presetName];
-  if (!preset) {
-    console.warn(`Preset not found: ${presetName}`);
-    return;
+  if (preset) {
+    globalSynth.setParameters(preset);
+    console.log(`Loaded preset: ${presetName}`);
   }
-
-  // Update parameters
-  Object.assign(parameters, preset.parameters);
-
-  // Apply to synth if initialized
-  if (isInitialized.value) {
-    updateAttack();
-    updateRelease();
-    updateOscillatorType();
-    updateReverb();
-  }
-
-  console.log(`Loaded preset: ${preset.name}`);
-};
-
-/**
- * Save current settings as preset
- */
-const saveCurrentAsPreset = () => {
-  const presetData = {
-    name: 'Custom',
-    parameters: { ...parameters }
-  };
-
-  // Save to localStorage
-  localStorage.setItem('fmSynthCustomPreset', JSON.stringify(presetData));
-  console.log('Saved current settings as custom preset');
 };
 
 /**
@@ -536,108 +367,22 @@ const saveCurrentAsPreset = () => {
  */
 const resetToDefault = () => {
   loadPreset('default');
-  console.log('Reset to default parameters');
+};
+
+/**
+ * Save current settings
+ */
+const saveCurrentSettings = () => {
+  // Settings are automatically saved to localStorage by the global synth
+  console.log('Current settings saved automatically');
 };
 
 /**
  * Clear error message
  */
 const clearError = () => {
-  error.value = '';
+  globalSynth.clearError();
 };
-
-/**
- * Dispose of all Tone.js resources
- */
-const disposeSynth = () => {
-  try {
-    if (fmSynth) {
-      fmSynth.dispose();
-      fmSynth = null;
-    }
-    
-    if (reverb) {
-      reverb.dispose();
-      reverb = null;
-    }
-    
-    if (masterVolume) {
-      masterVolume.dispose();
-      masterVolume = null;
-    }
-  } catch (err) {
-    console.warn('Error disposing FM Synthesizer:', err);
-  }
-  
-  isInitialized.value = false;
-};
-
-/**
- * Public API for external use
- */
-const triggerNote = (note: string | number, duration: string = '8n', velocity: number = 0.8) => {
-  if (!fmSynth || !isInitialized.value) {
-    console.warn('FM Synthesizer not ready');
-    return;
-  }
-  
-  try {
-    fmSynth.triggerAttackRelease(note, duration, undefined, velocity);
-  } catch (err) {
-    console.warn('Failed to trigger note:', err);
-  }
-};
-
-/**
- * Get current parameters
- */
-const getCurrentParameters = (): SynthParameters => {
-  return { ...parameters };
-};
-
-/**
- * Set parameters programmatically
- */
-const setParameters = (newParams: Partial<SynthParameters>) => {
-  Object.assign(parameters, newParams);
-  
-  if (isInitialized.value) {
-    updateAttack();
-    updateRelease();
-    updateOscillatorType();
-    updateReverb();
-  }
-};
-
-// Load custom preset on mount if available
-onMounted(() => {
-  try {
-    const savedPreset = localStorage.getItem('fmSynthCustomPreset');
-    if (savedPreset) {
-      const presetData = JSON.parse(savedPreset);
-      presets.custom = presetData;
-    }
-  } catch (err) {
-    console.warn('Failed to load custom preset:', err);
-  }
-});
-
-// Cleanup on unmount
-onUnmounted(() => {
-  disposeSynth();
-});
-
-// Expose public API
-defineExpose({
-  initializeSynth,
-  triggerNote,
-  getCurrentParameters,
-  setParameters,
-  loadPreset,
-  resetToDefault,
-  isInitialized,
-  isInitializing
-});
 </script>
 
 <style scoped>
