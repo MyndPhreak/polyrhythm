@@ -165,6 +165,41 @@ function createPolyphonicSynthInstance() {
   watch(parameters, saveParameters, { deep: true });
 
   /**
+   * Ensure audio context is running
+   */
+  const ensureAudioContextRunning = async (): Promise<boolean> => {
+    if (!context || !Tone) {
+      console.warn('Audio context or Tone.js not available');
+      return false;
+    }
+
+    try {
+      if (context.state === 'suspended') {
+        console.log('Audio context suspended, attempting to resume...');
+        await Tone.start();
+        await context.resume();
+        
+        // Wait a bit for the context to actually resume
+        let attempts = 0;
+        while (context.state !== 'running' && attempts < 10) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          attempts++;
+        }
+      }
+
+      if (context.state !== 'running') {
+        console.warn(`Audio context not running after resume attempt. State: ${context.state}`);
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.error('Failed to ensure audio context is running:', err);
+      return false;
+    }
+  };
+
+  /**
    * Initialize the Polyphonic FM Synthesizer with improved error handling
    */
   const initialize = async (): Promise<boolean> => {
@@ -456,35 +491,65 @@ function createPolyphonicSynthInstance() {
         voiceCleanupTimeouts.delete(voice.id);
       }
 
+      // Stop and dispose oscillators safely
       if (voice.oscillator) {
-        voice.oscillator.stop();
-        voice.oscillator.dispose();
+        try {
+          if (voice.oscillator.state === 'started') {
+            voice.oscillator.stop();
+          }
+          voice.oscillator.dispose();
+        } catch (err) {
+          console.warn(`Error stopping/disposing oscillator for voice ${voice.id}:`, err);
+        }
         voice.oscillator = undefined;
       }
 
       if (voice.modulator) {
-        voice.modulator.stop();
-        voice.modulator.dispose();
+        try {
+          if (voice.modulator.state === 'started') {
+            voice.modulator.stop();
+          }
+          voice.modulator.dispose();
+        } catch (err) {
+          console.warn(`Error stopping/disposing modulator for voice ${voice.id}:`, err);
+        }
         voice.modulator = undefined;
       }
 
+      // Dispose other components safely
       if (voice.envelope) {
-        voice.envelope.dispose();
+        try {
+          voice.envelope.dispose();
+        } catch (err) {
+          console.warn(`Error disposing envelope for voice ${voice.id}:`, err);
+        }
         voice.envelope = undefined;
       }
 
       if (voice.modulatorEnvelope) {
-        voice.modulatorEnvelope.dispose();
+        try {
+          voice.modulatorEnvelope.dispose();
+        } catch (err) {
+          console.warn(`Error disposing modulator envelope for voice ${voice.id}:`, err);
+        }
         voice.modulatorEnvelope = undefined;
       }
 
       if (voice.panner) {
-        voice.panner.dispose();
+        try {
+          voice.panner.dispose();
+        } catch (err) {
+          console.warn(`Error disposing panner for voice ${voice.id}:`, err);
+        }
         voice.panner = undefined;
       }
 
       if (voice.voiceGain) {
-        voice.voiceGain.dispose();
+        try {
+          voice.voiceGain.dispose();
+        } catch (err) {
+          console.warn(`Error disposing voice gain for voice ${voice.id}:`, err);
+        }
         voice.voiceGain = undefined;
       }
 
@@ -501,11 +566,18 @@ function createPolyphonicSynthInstance() {
   /**
    * Trigger a note with polyphonic capability and improved audio mixing
    */
-  const triggerNote = (frequency: number | string, duration: number = 0.5, velocity: number = 0.8): void => {
+  const triggerNote = async (frequency: number | string, duration: number = 0.5, velocity: number = 0.8): Promise<void> => {
     console.log(`Polyphonic synth: triggerNote called with frequency=${frequency}, duration=${duration}, velocity=${velocity}`);
 
     if (!isInitialized.value || !context) {
       console.warn('Polyphonic FM Synthesizer not ready - initialized:', isInitialized.value, 'context:', !!context);
+      return;
+    }
+
+    // Ensure audio context is running before proceeding
+    const contextReady = await ensureAudioContextRunning();
+    if (!contextReady) {
+      console.warn('Audio context not ready, cannot trigger note');
       return;
     }
 
@@ -554,6 +626,7 @@ function createPolyphonicSynthInstance() {
 
     } catch (err) {
       console.error('Failed to trigger polyphonic note:', err);
+      throw err; // Re-throw to allow caller to handle
     }
   };
 

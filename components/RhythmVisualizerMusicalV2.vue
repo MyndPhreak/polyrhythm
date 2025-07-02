@@ -452,8 +452,8 @@ const triggerPolyphonicNote = async (nodeIndex: number, velocity: number = 0.8) 
       // Add to active sounds tracking
       const soundId = addActiveSound(nodeIndex, duration, frequency, finalVolume);
       
-      // Trigger the note with polyphonic synth
-      polyphonicSynth.triggerNote(frequency, duration, finalVolume);
+      // Trigger the note with polyphonic synth (now async)
+      await polyphonicSynth.triggerNote(frequency, duration, finalVolume);
       
       console.log(`Visualizer: Successfully triggered polyphonic note for node ${nodeIndex}, sound ID: ${soundId}`);
     } else {
@@ -493,7 +493,7 @@ const animate = (timestamp: number) => {
       node.velocity = -1; // Reverse direction
       hasChanges = true;
 
-      // Trigger polyphonic musical note for top boundary hit
+      // Trigger polyphonic musical note for top boundary hit (async)
       triggerPolyphonicNote(i, 0.8);
 
       // Emit hit event for top boundary
@@ -510,7 +510,7 @@ const animate = (timestamp: number) => {
       node.velocity = 1; // Reverse direction
       hasChanges = true;
 
-      // Trigger polyphonic musical note for bottom boundary hit
+      // Trigger polyphonic musical note for bottom boundary hit (async)
       triggerPolyphonicNote(i, 0.6);
 
       // Emit hit event for bottom boundary
@@ -753,10 +753,10 @@ const handleMouseLeave = () => {
 /**
  * Handle canvas click to test polyphonic notes
  */
-const handleCanvasClick = (event: MouseEvent) => {
+const handleCanvasClick = async (event: MouseEvent) => {
   if (hoveredNode.value !== null) {
     console.log(`Canvas clicked on node ${hoveredNode.value}`);
-    triggerPolyphonicNote(hoveredNode.value, 0.8);
+    await triggerPolyphonicNote(hoveredNode.value, 0.8);
   }
 };
 
