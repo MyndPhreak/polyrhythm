@@ -96,6 +96,9 @@
               </div>
             </section>
 
+            <!-- Controls Panel -->
+            <aside class="xl:col-span-4 space-y-6" aria-label="Control panel">
+
               <!-- Audio Controls V3 -->
               <div class="animate-fade-in" style="animation-delay: 0.4s">
                 <ClientOnly>
@@ -105,9 +108,7 @@
                   <AudioControlsV3 />
                 </ClientOnly>
               </div>
-
-            <!-- Controls Panel -->
-            <aside class="xl:col-span-4 space-y-6" aria-label="Control panel">
+              
               <!-- FM Synthesizer Instrument -->
               <div class="animate-fade-in" style="animation-delay: 0.3s">
                 <ClientOnly>
