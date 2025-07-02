@@ -14,6 +14,7 @@ export interface Voice {
   modulator?: any;
   modulatorEnvelope?: any;
   panner?: any;
+  voiceGain?: any;
 }
 
 // Polyphonic synthesizer parameters
@@ -101,37 +102,81 @@ function createPolyphonicSynthInstance() {
   watch(parameters, saveParameters, { deep: true });
 
   /**
-   * Initialize the Polyphonic FM Synthesizer
+   * Initialize the Polyphonic FM Synthesizer with improved error handling
    */
   const initialize = async (): Promise<boolean> => {
-    if (isInitializing.value) return false;
-    if (isInitialized.value) return true;
+    if (isInitializing.value) {
+      console.log('Polyphonic synth already initializing, waiting...');
+      return false;
+    }
+    if (isInitialized.value) {
+      console.log('Polyphonic synth already initialized');
+      return true;
+    }
 
     isInitializing.value = true;
     error.value = '';
 
     try {
-      console.log('Initializing Polyphonic FM Synthesizer...');
+      console.log('Starting Polyphonic FM Synthesizer initialization...');
 
-      // Load Tone.js with timeout
-      const loadPromise = import('tone');
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Tone.js load timeout')), 5000)
-      );
+      // Load Tone.js with timeout and better error handling
+      try {
+        const loadPromise = import('tone');
+        const timeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Tone.js load timeout after 10 seconds')), 10000)
+        );
 
-      Tone = await Promise.race([loadPromise, timeoutPromise]);
-      console.log('Tone.js loaded successfully for polyphonic synth');
-
-      // Ensure audio context is running
-      if (Tone.context.state !== 'running') {
-        await Tone.start();
-        console.log('Tone.js context started for polyphonic synth');
+        Tone = await Promise.race([loadPromise, timeoutPromise]);
+        console.log('Tone.js loaded successfully for polyphonic synth');
+      } catch (loadError) {
+        throw new Error(`Failed to load Tone.js: ${loadError.message}`);
       }
 
+      // Get audio context and ensure it's running
       context = Tone.context;
+      console.log(`Initial Tone.js context state: ${context.state}`);
 
-      // Create master volume control
-      masterVolume = new Tone.Volume(Tone.gainToDb(parameters.masterVolume)).toDestination();
+      // Start audio context with user interaction handling
+      if (context.state !== 'running') {
+        console.log('Starting Tone.js context...');
+        try {
+          await Tone.start();
+          console.log('Tone.js started successfully');
+        } catch (startError) {
+          console.warn('Tone.start() failed, trying context.resume():', startError);
+          if (context.state === 'suspended') {
+            await context.resume();
+          }
+        }
+      }
+
+      // Wait for context to be running with multiple attempts
+      let attempts = 0;
+      const maxAttempts = 20;
+      while (context.state !== 'running' && attempts < maxAttempts) {
+        console.log(`Waiting for context to be running... attempt ${attempts + 1}/${maxAttempts}, current state: ${context.state}`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        if (context.state === 'suspended') {
+          try {
+            await context.resume();
+          } catch (resumeError) {
+            console.warn('Context resume failed:', resumeError);
+          }
+        }
+        attempts++;
+      }
+
+      if (context.state !== 'running') {
+        throw new Error(`Audio context failed to start after ${maxAttempts} attempts. Final state: ${context.state}`);
+      }
+
+      console.log('Audio context is now running, creating audio components...');
+
+      // Create master volume control with proper scaling
+      masterVolume = new Tone.Volume(Tone.gainToDb(parameters.masterVolume * 0.5)).toDestination();
+      console.log('Master volume created');
 
       // Create reverb effect
       reverb = new Tone.Reverb({
@@ -139,14 +184,16 @@ function createPolyphonicSynthInstance() {
         wet: parameters.reverbAmount
       }).connect(masterVolume);
 
+      console.log('Reverb created, generating impulse response...');
       // Wait for reverb to generate its impulse response
       await reverb.generate();
+      console.log('Reverb impulse response generated');
 
       // Initialize voice pool
       initializeVoicePool();
 
       isInitialized.value = true;
-      console.log('Polyphonic FM Synthesizer initialized successfully');
+      console.log('Polyphonic FM Synthesizer initialized successfully!');
       return true;
 
     } catch (err) {
@@ -215,9 +262,14 @@ function createPolyphonicSynthInstance() {
    * Create FM synthesis components for a voice with improved audio mixing
    */
   const createVoiceComponents = (voice: Voice) => {
-    if (!Tone || !context) return;
+    if (!Tone || !context) {
+      console.error('Tone.js or context not available for voice creation');
+      return;
+    }
 
     try {
+      console.log(`Creating voice components for voice ${voice.id} at ${voice.frequency}Hz`);
+
       // Calculate stereo position based on voice ID for better separation
       const panPosition = (voice.id / (parameters.maxVoices - 1) - 0.5) * parameters.voiceSpread;
 
@@ -243,7 +295,7 @@ function createPolyphonicSynthInstance() {
       voice.panner = new Tone.Panner(panPosition);
 
       // Create a gain node for voice-level volume control to prevent clipping
-      const voiceGain = new Tone.Gain(voice.velocity * 0.3); // Scale down to prevent clipping
+      voice.voiceGain = new Tone.Gain(voice.velocity * 0.2); // Scale down to prevent clipping
 
       // Connect modulator through its envelope to carrier frequency
       voice.modulator.connect(voice.modulatorEnvelope);
@@ -251,18 +303,19 @@ function createPolyphonicSynthInstance() {
 
       // Connect carrier through envelope, voice gain, panner to reverb
       voice.oscillator.connect(voice.envelope);
-      voice.envelope.connect(voiceGain);
-      voiceGain.connect(voice.panner);
+      voice.envelope.connect(voice.voiceGain);
+      voice.voiceGain.connect(voice.panner);
       voice.panner.connect(reverb);
 
       // Start oscillators
       voice.oscillator.start();
       voice.modulator.start();
 
-      console.log(`Created voice components for voice ${voice.id} at ${voice.frequency}Hz`);
+      console.log(`Voice components created successfully for voice ${voice.id}`);
 
     } catch (err) {
-      console.warn('Failed to create voice components:', err);
+      console.error('Failed to create voice components:', err);
+      throw err;
     }
   };
 
@@ -270,15 +323,20 @@ function createPolyphonicSynthInstance() {
    * Apply envelope to a voice with improved timing
    */
   const applyEnvelope = (voice: Voice) => {
-    if (!voice.envelope || !voice.modulatorEnvelope || !context) return;
+    if (!voice.envelope || !voice.modulatorEnvelope || !context) {
+      console.error('Voice envelope components not available');
+      return;
+    }
 
     const now = context.currentTime;
     const attackTime = parameters.attack;
     const releaseTime = parameters.release;
-    const sustainLevel = voice.velocity * 0.5; // Scale down to prevent clipping
-    const modulationAmount = parameters.modulationIndex * voice.velocity * 0.3; // Scale down modulation
+    const sustainLevel = voice.velocity * 0.3; // Scale down to prevent clipping
+    const modulationAmount = parameters.modulationIndex * voice.velocity * 0.2; // Scale down modulation
 
     try {
+      console.log(`Applying envelope to voice ${voice.id}: attack=${attackTime}s, release=${releaseTime}s`);
+
       // Carrier envelope with smooth curves
       voice.envelope.gain.setValueAtTime(0, now);
       voice.envelope.gain.linearRampToValueAtTime(sustainLevel, now + attackTime);
@@ -291,10 +349,10 @@ function createPolyphonicSynthInstance() {
       voice.modulatorEnvelope.gain.setValueAtTime(modulationAmount, now + voice.duration - releaseTime);
       voice.modulatorEnvelope.gain.exponentialRampToValueAtTime(0.001, now + voice.duration);
 
-      console.log(`Applied envelope to voice ${voice.id}: attack=${attackTime}s, release=${releaseTime}s`);
+      console.log(`Envelope applied successfully to voice ${voice.id}`);
 
     } catch (err) {
-      console.warn('Failed to apply envelope:', err);
+      console.error('Failed to apply envelope:', err);
     }
   };
 
@@ -305,6 +363,8 @@ function createPolyphonicSynthInstance() {
     if (!voice.isActive) return;
 
     try {
+      console.log(`Stopping voice ${voice.id}...`);
+
       // Clear any existing cleanup timeout
       const existingTimeout = voiceCleanupTimeouts.get(voice.id);
       if (existingTimeout) {
@@ -339,13 +399,18 @@ function createPolyphonicSynthInstance() {
         voice.panner = undefined;
       }
 
+      if (voice.voiceGain) {
+        voice.voiceGain.dispose();
+        voice.voiceGain = undefined;
+      }
+
       voice.isActive = false;
       activeVoiceCount.value = Math.max(0, activeVoiceCount.value - 1);
 
-      console.log(`Stopped voice ${voice.id}, active voices: ${activeVoiceCount.value}`);
+      console.log(`Voice ${voice.id} stopped successfully, active voices: ${activeVoiceCount.value}`);
 
     } catch (err) {
-      console.warn('Failed to stop voice:', err);
+      console.error('Failed to stop voice:', err);
     }
   };
 
@@ -353,8 +418,10 @@ function createPolyphonicSynthInstance() {
    * Trigger a note with polyphonic capability and improved audio mixing
    */
   const triggerNote = (frequency: number | string, duration: number = 0.5, velocity: number = 0.8): void => {
+    console.log(`Polyphonic synth: triggerNote called with frequency=${frequency}, duration=${duration}, velocity=${velocity}`);
+
     if (!isInitialized.value || !context) {
-      console.warn('Polyphonic FM Synthesizer not ready');
+      console.warn('Polyphonic FM Synthesizer not ready - initialized:', isInitialized.value, 'context:', !!context);
       return;
     }
 
@@ -363,6 +430,8 @@ function createPolyphonicSynthInstance() {
       const freq = typeof frequency === 'string' ? noteToFrequency(frequency) : frequency;
       const clampedVelocity = Math.max(0, Math.min(1, velocity));
       const clampedDuration = Math.max(0.1, duration);
+
+      console.log(`Processing note: ${freq.toFixed(1)}Hz for ${clampedDuration}s at velocity ${clampedVelocity}`);
 
       // Allocate a voice
       const voice = allocateVoice();
@@ -381,6 +450,8 @@ function createPolyphonicSynthInstance() {
 
       activeVoiceCount.value++;
 
+      console.log(`Allocated voice ${voice.id}, active voices: ${activeVoiceCount.value}`);
+
       // Create audio components for this voice
       createVoiceComponents(voice);
 
@@ -395,10 +466,10 @@ function createPolyphonicSynthInstance() {
 
       voiceCleanupTimeouts.set(voice.id, cleanupTimeout);
 
-      console.log(`Polyphonic FM Synth triggered: ${freq.toFixed(1)}Hz, voice ${voice.id}, active voices: ${activeVoiceCount.value}`);
+      console.log(`Polyphonic FM Synth triggered successfully: ${freq.toFixed(1)}Hz, voice ${voice.id}, active voices: ${activeVoiceCount.value}`);
 
     } catch (err) {
-      console.warn('Failed to trigger polyphonic note:', err);
+      console.error('Failed to trigger polyphonic note:', err);
     }
   };
 
@@ -426,7 +497,7 @@ function createPolyphonicSynthInstance() {
     if (masterVolume && isInitialized.value && Tone) {
       try {
         // Scale volume to prevent clipping with multiple voices
-        const scaledVolume = clampedVolume * 0.7; // Reduce overall volume for polyphonic mixing
+        const scaledVolume = clampedVolume * 0.5; // Reduce overall volume for polyphonic mixing
         masterVolume.volume.value = Tone.gainToDb(scaledVolume);
         console.log(`Updated polyphonic master volume to: ${clampedVolume} (scaled: ${scaledVolume})`);
       } catch (err) {
