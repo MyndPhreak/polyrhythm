@@ -48,10 +48,8 @@
             <div class="animate-fade-in">
               <h1 class="text-5xl md:text-6xl font-bold bg-gradient-to-r from-white via-primary-200 to-accent-300 bg-clip-text text-transparent mb-4">
                 Musical Polyrhythm Generator
-                Musical Polyrhythm Generator
               </h1>
               <p class="text-xl text-secondary-300 max-w-2xl mx-auto leading-relaxed">
-                Create complex polyrhythmic patterns with musical scales, individual note assignment, and interactive audio visualization
                 Create complex polyrhythmic patterns with musical scales, individual note assignment, and interactive audio visualization
               </p>
             </div>
@@ -63,14 +61,12 @@
           <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
             <!-- Visualizer Section -->
             <section class="xl:col-span-8 space-y-6" aria-label="Musical rhythm visualization">
-            <section class="xl:col-span-8 space-y-6" aria-label="Musical rhythm visualization">
               <div class="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 shadow-strong p-6 animate-fade-in">
                 <div class="flex items-center justify-between mb-6">
                   <h2 class="text-2xl font-semibold text-white flex items-center space-x-3">
                     <div class="w-8 h-8 bg-primary-500/20 rounded-lg flex items-center justify-center">
                       <ChartBarIcon class="w-5 h-5 text-primary-400" />
                     </div>
-                    <span>Musical Visualization</span>
                     <span>Musical Visualization</span>
                   </h2>
                   <div class="flex items-center space-x-2 text-sm text-secondary-400">
@@ -193,7 +189,6 @@ const handleNodeHit = (event: NodeHitEvent) => {
     // Audio is now handled directly in the RhythmVisualizerMusical component
     // This event can be used for additional visual effects or analytics
   } catch (err) {
-    handleError(err as Error, 'Failed to handle musical node hit');
     handleError(err as Error, 'Failed to handle musical node hit');
   }
 };
