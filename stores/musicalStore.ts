@@ -17,15 +17,78 @@ const DEFAULT_SETTINGS: MusicalAudioSettings = {
   autoAssignScale: true
 };
 
+// Helper function to validate and parse settings from localStorage
+function validateSettings(savedSettings: any): MusicalAudioSettings {
+  if (!savedSettings || typeof savedSettings !== 'object') {
+    return DEFAULT_SETTINGS;
+  }
+
+  return {
+    rootNote: typeof savedSettings.rootNote === 'string' ? savedSettings.rootNote : DEFAULT_SETTINGS.rootNote,
+    scaleType: typeof savedSettings.scaleType === 'string' ? savedSettings.scaleType : DEFAULT_SETTINGS.scaleType,
+    octaveRange: {
+      min: typeof savedSettings.octaveRange?.min === 'number' ? savedSettings.octaveRange.min : 
+           (typeof savedSettings.octaveRange?.min === 'string' ? parseInt(savedSettings.octaveRange.min, 10) : DEFAULT_SETTINGS.octaveRange.min),
+      max: typeof savedSettings.octaveRange?.max === 'number' ? savedSettings.octaveRange.max : 
+           (typeof savedSettings.octaveRange?.max === 'string' ? parseInt(savedSettings.octaveRange.max, 10) : DEFAULT_SETTINGS.octaveRange.max)
+    },
+    globalVolume: typeof savedSettings.globalVolume === 'number' ? savedSettings.globalVolume : 
+                  (typeof savedSettings.globalVolume === 'string' ? parseFloat(savedSettings.globalVolume) : DEFAULT_SETTINGS.globalVolume),
+    noteDuration: typeof savedSettings.noteDuration === 'number' ? savedSettings.noteDuration : 
+                  (typeof savedSettings.noteDuration === 'string' ? parseFloat(savedSettings.noteDuration) : DEFAULT_SETTINGS.noteDuration),
+    autoAssignScale: typeof savedSettings.autoAssignScale === 'boolean' ? savedSettings.autoAssignScale : DEFAULT_SETTINGS.autoAssignScale
+  };
+}
+
+// Helper function to validate and parse node configs from localStorage
+function validateNodeConfigs(savedNodeConfigs: any): NodeAudioConfig[] {
+  if (!Array.isArray(savedNodeConfigs)) {
+    return [];
+  }
+
+  return savedNodeConfigs.map((config: any) => ({
+    note: typeof config.note === 'string' ? config.note : 'C',
+    octave: typeof config.octave === 'number' ? config.octave : 
+            (typeof config.octave === 'string' ? parseInt(config.octave, 10) : 4),
+    volume: typeof config.volume === 'number' ? config.volume : 
+            (typeof config.volume === 'string' ? parseFloat(config.volume) : 1.0),
+    duration: typeof config.duration === 'number' ? config.duration : 
+              (typeof config.duration === 'string' ? parseFloat(config.duration) : 0.2),
+    enabled: typeof config.enabled === 'boolean' ? config.enabled : true
+  }));
+}
+
 export const useMusicalStore = defineStore('musical', {
   state: (): MusicalState => {
-    // Try to load settings from localStorage
-    const savedSettings = localStorage.getItem('musicalSettings');
-    const savedNodeConfigs = localStorage.getItem('musicalNodeConfigs');
+    // Try to load settings from localStorage with validation
+    let settings = DEFAULT_SETTINGS;
+    let nodeConfigs: NodeAudioConfig[] = [];
+
+    try {
+      const savedSettings = localStorage.getItem('musicalSettings');
+      if (savedSettings) {
+        const parsedSettings = JSON.parse(savedSettings);
+        settings = validateSettings(parsedSettings);
+      }
+    } catch (error) {
+      console.warn('Failed to load musical settings from localStorage:', error);
+      settings = DEFAULT_SETTINGS;
+    }
+
+    try {
+      const savedNodeConfigs = localStorage.getItem('musicalNodeConfigs');
+      if (savedNodeConfigs) {
+        const parsedNodeConfigs = JSON.parse(savedNodeConfigs);
+        nodeConfigs = validateNodeConfigs(parsedNodeConfigs);
+      }
+    } catch (error) {
+      console.warn('Failed to load musical node configs from localStorage:', error);
+      nodeConfigs = [];
+    }
     
     return {
-      settings: savedSettings ? JSON.parse(savedSettings) : DEFAULT_SETTINGS,
-      nodeConfigs: savedNodeConfigs ? JSON.parse(savedNodeConfigs) : []
+      settings,
+      nodeConfigs
     };
   },
 
