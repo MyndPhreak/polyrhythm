@@ -19,6 +19,20 @@
       </div>
     </div>
 
+    <!-- Debug Info -->
+    <div class="p-3 bg-black/20 rounded-lg text-xs text-white space-y-1">
+      <div>Synth Status: {{ isInitialized ? 'Initialized' : 'Not Initialized' }}</div>
+      <div>Initializing: {{ isInitializing ? 'Yes' : 'No' }}</div>
+      <div>Error: {{ error || 'None' }}</div>
+      <div>Active Voices: {{ voiceStats.activeVoices }} / {{ voiceStats.maxVoices }}</div>
+      <button 
+        @click="debugPolyphonicSynth" 
+        class="px-2 py-1 bg-blue-600 rounded text-white text-xs"
+      >
+        Debug Synth
+      </button>
+    </div>
+
     <!-- Voice Status -->
     <div class="p-4 bg-secondary-800/50 rounded-xl border border-white/10">
       <div class="text-sm space-y-2">
@@ -49,7 +63,7 @@
         </div>
       </div>
       <button
-        @click="initializeSynth"
+        @click="initializeSynthWithDebug"
         :disabled="isInitializing"
         class="w-full px-4 py-3 bg-info-600 hover:bg-info-700 disabled:bg-info-800 disabled:cursor-not-allowed text-white rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-info-500 focus:ring-offset-2 focus:ring-offset-secondary-900 shadow-medium hover:shadow-strong transform hover:scale-105 disabled:hover:scale-100"
       >
@@ -80,7 +94,7 @@
             <p class="text-error-200 text-sm leading-relaxed mb-3">{{ error }}</p>
             <div class="flex space-x-2">
               <button 
-                @click="initializeSynth"
+                @click="initializeSynthWithDebug"
                 :disabled="isInitializing"
                 class="px-3 py-2 bg-error-600 hover:bg-error-700 disabled:bg-error-800 text-white text-xs rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-error-500"
               >
@@ -103,199 +117,7 @@
 
     <!-- Synthesizer Controls -->
     <div v-if="isInitialized" class="space-y-6">
-      <!-- Envelope Controls -->
-      <div class="space-y-4">
-        <h3 class="text-lg font-medium text-white flex items-center space-x-2">
-          <AdjustmentsHorizontalIcon class="w-5 h-5 text-primary-400" />
-          <span>Envelope</span>
-        </h3>
-
-        <!-- Attack Time -->
-        <div class="space-y-3">
-          <label class="block text-sm font-medium text-secondary-200" for="poly-attack-time">
-            Attack Time: <span class="text-primary-400 font-semibold">{{ parameters.attack.toFixed(3) }}s</span>
-          </label>
-          <input
-            id="poly-attack-time"
-            type="range"
-            min="0.01"
-            max="2"
-            step="0.01"
-            :value="parameters.attack"
-            @input="updateAttack"
-            class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
-          />
-          <div class="flex justify-between text-xs text-secondary-400">
-            <span>0.01s</span>
-            <span>2.00s</span>
-          </div>
-        </div>
-
-        <!-- Release Time -->
-        <div class="space-y-3">
-          <label class="block text-sm font-medium text-secondary-200" for="poly-release-time">
-            Release Time: <span class="text-primary-400 font-semibold">{{ parameters.release.toFixed(3) }}s</span>
-          </label>
-          <input
-            id="poly-release-time"
-            type="range"
-            min="0.1"
-            max="4"
-            step="0.1"
-            :value="parameters.release"
-            @input="updateRelease"
-            class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
-          />
-          <div class="flex justify-between text-xs text-secondary-400">
-            <span>0.1s</span>
-            <span>4.0s</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- FM Synthesis Controls -->
-      <div class="space-y-4">
-        <h3 class="text-lg font-medium text-white flex items-center space-x-2">
-          <SpeakerWaveIcon class="w-5 h-5 text-accent-400" />
-          <span>FM Synthesis</span>
-        </h3>
-
-        <!-- Harmonicity -->
-        <div class="space-y-3">
-          <label class="block text-sm font-medium text-secondary-200" for="poly-harmonicity">
-            Harmonicity: <span class="text-accent-400 font-semibold">{{ parameters.harmonicity.toFixed(2) }}</span>
-          </label>
-          <input
-            id="poly-harmonicity"
-            type="range"
-            min="0.1"
-            max="10"
-            step="0.1"
-            :value="parameters.harmonicity"
-            @input="updateHarmonicity"
-            class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
-          />
-          <div class="flex justify-between text-xs text-secondary-400">
-            <span>0.1</span>
-            <span>10.0</span>
-          </div>
-        </div>
-
-        <!-- Modulation Index -->
-        <div class="space-y-3">
-          <label class="block text-sm font-medium text-secondary-200" for="poly-mod-index">
-            Modulation Index: <span class="text-accent-400 font-semibold">{{ parameters.modulationIndex.toFixed(1) }}</span>
-          </label>
-          <input
-            id="poly-mod-index"
-            type="range"
-            min="0"
-            max="50"
-            step="0.5"
-            :value="parameters.modulationIndex"
-            @input="updateModulationIndex"
-            class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
-          />
-          <div class="flex justify-between text-xs text-secondary-400">
-            <span>0</span>
-            <span>50</span>
-          </div>
-        </div>
-
-        <!-- Oscillator Type -->
-        <div class="space-y-3">
-          <label class="block text-sm font-medium text-secondary-200" for="poly-oscillator-type">
-            Carrier Waveform
-          </label>
-          <div class="relative">
-            <select
-              id="poly-oscillator-type"
-              :value="parameters.oscillatorType"
-              @change="updateOscillatorType"
-              class="w-full bg-secondary-700/50 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-all duration-200 appearance-none cursor-pointer hover:bg-secondary-700/70"
-            >
-              <option value="sine">Sine Wave</option>
-              <option value="square">Square Wave</option>
-              <option value="triangle">Triangle Wave</option>
-              <option value="sawtooth">Sawtooth Wave</option>
-            </select>
-            <ChevronDownIcon class="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-secondary-400 pointer-events-none" />
-          </div>
-        </div>
-      </div>
-
-      <!-- Audio Controls -->
-      <div class="space-y-4">
-        <h3 class="text-lg font-medium text-white flex items-center space-x-2">
-          <SparklesIcon class="w-5 h-5 text-success-400" />
-          <span>Audio</span>
-        </h3>
-
-        <!-- Master Volume -->
-        <div class="space-y-3">
-          <label class="block text-sm font-medium text-secondary-200" for="poly-master-volume">
-            Master Volume: <span class="text-warning-400 font-semibold">{{ (parameters.masterVolume * 100).toFixed(0) }}%</span>
-          </label>
-          <input
-            id="poly-master-volume"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            :value="parameters.masterVolume"
-            @input="updateMasterVolume"
-            class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-warning-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
-          />
-          <div class="flex justify-between text-xs text-secondary-400">
-            <span>0%</span>
-            <span>100%</span>
-          </div>
-        </div>
-
-        <!-- Reverb Amount -->
-        <div class="space-y-3">
-          <label class="block text-sm font-medium text-secondary-200" for="poly-reverb-amount">
-            Reverb Amount: <span class="text-success-400 font-semibold">{{ (parameters.reverbAmount * 100).toFixed(0) }}%</span>
-          </label>
-          <input
-            id="poly-reverb-amount"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            :value="parameters.reverbAmount"
-            @input="updateReverb"
-            class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-success-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
-          />
-          <div class="flex justify-between text-xs text-secondary-400">
-            <span>0%</span>
-            <span>100%</span>
-          </div>
-        </div>
-
-        <!-- Voice Spread -->
-        <div class="space-y-3">
-          <label class="block text-sm font-medium text-secondary-200" for="poly-voice-spread">
-            Stereo Spread: <span class="text-info-400 font-semibold">{{ (parameters.voiceSpread * 100).toFixed(0) }}%</span>
-          </label>
-          <input
-            id="poly-voice-spread"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            :value="parameters.voiceSpread"
-            @input="updateVoiceSpread"
-            class="w-full h-2 bg-secondary-700 rounded-lg appearance-none cursor-pointer slider-thumb focus:outline-none focus:ring-2 focus:ring-info-500 focus:ring-offset-2 focus:ring-offset-secondary-900 transition-all duration-200"
-          />
-          <div class="flex justify-between text-xs text-secondary-400">
-            <span>Mono</span>
-            <span>Wide</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Test Controls -->
+      <!-- Test Controls with Debug -->
       <div class="space-y-4">
         <div class="flex items-center justify-between">
           <h3 class="text-lg font-medium text-white flex items-center space-x-2">
@@ -303,50 +125,75 @@
             <span>Test Polyphony</span>
           </h3>
           <button
-            @click="stopAllVoices"
+            @click="stopAllVoicesWithDebug"
             class="px-3 py-1 bg-error-600 hover:bg-error-700 text-white text-xs rounded-lg transition-colors duration-200"
           >
             Stop All
           </button>
         </div>
 
-        <!-- Chord Test Buttons -->
+        <!-- Chord Test Buttons with Debug -->
         <div class="grid grid-cols-2 gap-3">
           <button
-            @click="playChord(['C4', 'E4', 'G4'])"
-            class="group px-4 py-3 bg-warning-600/20 hover:bg-warning-600/40 border border-warning-500/30 hover:border-warning-400/50 text-warning-200 hover:text-white rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-warning-500 focus:ring-offset-2 focus:ring-offset-secondary-900 shadow-soft hover:shadow-medium transform hover:scale-105"
+            @click="playChordWithDebug(['C4', 'E4', 'G4'])"
+            @mousedown="handleButtonPress('C Major')"
+            @mouseup="handleButtonRelease('C Major')"
+            class="group px-4 py-3 bg-warning-600/20 hover:bg-warning-600/40 border border-warning-500/30 hover:border-warning-400/50 text-warning-200 hover:text-white rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-warning-500 focus:ring-offset-2 focus:ring-offset-secondary-900 shadow-soft hover:shadow-medium transform hover:scale-105 active:scale-95"
           >
             <div class="text-sm font-medium">C Major</div>
             <div class="text-xs text-warning-400 group-hover:text-warning-300">3 voices</div>
           </button>
 
           <button
-            @click="playChord(['F4', 'A4', 'C5', 'E5'])"
-            class="group px-4 py-3 bg-warning-600/20 hover:bg-warning-600/40 border border-warning-500/30 hover:border-warning-400/50 text-warning-200 hover:text-white rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-warning-500 focus:ring-offset-2 focus:ring-offset-secondary-900 shadow-soft hover:shadow-medium transform hover:scale-105"
+            @click="playChordWithDebug(['F4', 'A4', 'C5', 'E5'])"
+            @mousedown="handleButtonPress('F Major 7')"
+            @mouseup="handleButtonRelease('F Major 7')"
+            class="group px-4 py-3 bg-warning-600/20 hover:bg-warning-600/40 border border-warning-500/30 hover:border-warning-400/50 text-warning-200 hover:text-white rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-warning-500 focus:ring-offset-2 focus:ring-offset-secondary-900 shadow-soft hover:shadow-medium transform hover:scale-105 active:scale-95"
           >
             <div class="text-sm font-medium">F Major 7</div>
             <div class="text-xs text-warning-400 group-hover:text-warning-300">4 voices</div>
           </button>
 
           <button
-            @click="playArpeggio()"
-            class="group px-4 py-3 bg-warning-600/20 hover:bg-warning-600/40 border border-warning-500/30 hover:border-warning-400/50 text-warning-200 hover:text-white rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-warning-500 focus:ring-offset-2 focus:ring-offset-secondary-900 shadow-soft hover:shadow-medium transform hover:scale-105"
+            @click="playArpeggioWithDebug()"
+            @mousedown="handleButtonPress('Arpeggio')"
+            @mouseup="handleButtonRelease('Arpeggio')"
+            class="group px-4 py-3 bg-warning-600/20 hover:bg-warning-600/40 border border-warning-500/30 hover:border-warning-400/50 text-warning-200 hover:text-white rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-warning-500 focus:ring-offset-2 focus:ring-offset-secondary-900 shadow-soft hover:shadow-medium transform hover:scale-105 active:scale-95"
           >
             <div class="text-sm font-medium">Arpeggio</div>
             <div class="text-xs text-warning-400 group-hover:text-warning-300">Sequential</div>
           </button>
 
           <button
-            @click="playPolyphonicTest()"
-            class="group px-4 py-3 bg-warning-600/20 hover:bg-warning-600/40 border border-warning-500/30 hover:border-warning-400/50 text-warning-200 hover:text-white rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-warning-500 focus:ring-offset-2 focus:ring-offset-secondary-900 shadow-soft hover:shadow-medium transform hover:scale-105"
+            @click="playPolyphonicTestWithDebug()"
+            @mousedown="handleButtonPress('Poly Test')"
+            @mouseup="handleButtonRelease('Poly Test')"
+            class="group px-4 py-3 bg-warning-600/20 hover:bg-warning-600/40 border border-warning-500/30 hover:border-warning-400/50 text-warning-200 hover:text-white rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-warning-500 focus:ring-offset-2 focus:ring-offset-secondary-900 shadow-soft hover:shadow-medium transform hover:scale-105 active:scale-95"
           >
             <div class="text-sm font-medium">Poly Test</div>
             <div class="text-xs text-warning-400 group-hover:text-warning-300">8 voices</div>
           </button>
         </div>
+
+        <!-- Single Note Test -->
+        <div class="mt-4">
+          <h4 class="text-sm font-medium text-white mb-2">Single Note Test</h4>
+          <div class="grid grid-cols-4 gap-2">
+            <button
+              v-for="note in ['C4', 'E4', 'G4', 'C5']"
+              :key="note"
+              @click="playTestNoteWithDebug(note)"
+              @mousedown="handleButtonPress(note)"
+              @mouseup="handleButtonRelease(note)"
+              class="px-3 py-2 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-200 hover:text-white rounded-lg transition-all duration-200 text-sm active:scale-95"
+            >
+              {{ note }}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <!-- Current Settings Display -->
+      <!-- Rest of the controls... -->
       <div class="p-4 bg-secondary-800/50 rounded-xl border border-white/10">
         <h4 class="text-sm font-medium text-white mb-3">Current Settings</h4>
         <div class="grid grid-cols-2 gap-3 text-xs text-secondary-300">
@@ -369,11 +216,7 @@ import {
   PlayIcon,
   ExclamationTriangleIcon,
   InformationCircleIcon,
-  ArrowPathIcon,
-  AdjustmentsHorizontalIcon,
-  SpeakerWaveIcon,
-  SparklesIcon,
-  ChevronDownIcon
+  ArrowPathIcon
 } from '@heroicons/vue/24/outline';
 import { usePolyphonicFMSynth } from '~/composables/usePolyphonicFMSynth';
 
@@ -390,118 +233,166 @@ const activeVoiceCount = computed(() => polyphonicSynth.activeVoiceCount.value);
 // Voice statistics
 const voiceStats = computed(() => polyphonicSynth.getVoiceStats());
 
+// Debug state
+const lastButtonPress = ref<string>('');
+const buttonPressCount = ref(0);
+
 /**
- * Initialize the Polyphonic FM Synthesizer
+ * Debug function for polyphonic synth
  */
-const initializeSynth = async () => {
-  await polyphonicSynth.initialize();
+const debugPolyphonicSynth = () => {
+  console.log('=== Polyphonic Synth Debug ===');
+  console.log('Initialized:', isInitialized.value);
+  console.log('Initializing:', isInitializing.value);
+  console.log('Error:', error.value);
+  console.log('Parameters:', parameters.value);
+  console.log('Voice Stats:', voiceStats.value);
+  console.log('Active Voice Count:', activeVoiceCount.value);
+  console.log('Button Press Count:', buttonPressCount.value);
+  console.log('Last Button Press:', lastButtonPress.value);
+  
+  // Test if the synth object exists
+  console.log('Polyphonic Synth Object:', polyphonicSynth);
+  console.log('Trigger Note Function:', typeof polyphonicSynth.triggerNote);
 };
 
 /**
- * Update attack parameter
+ * Initialize with debug logging
  */
-const updateAttack = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  polyphonicSynth.updateAttack(parseFloat(target.value));
+const initializeSynthWithDebug = async () => {
+  console.log('Initializing polyphonic synth with debug...');
+  try {
+    const result = await polyphonicSynth.initialize();
+    console.log('Initialization result:', result);
+    if (result) {
+      console.log('Polyphonic synth initialized successfully!');
+    } else {
+      console.error('Polyphonic synth initialization failed!');
+    }
+  } catch (err) {
+    console.error('Error during initialization:', err);
+  }
 };
 
 /**
- * Update release parameter
+ * Handle button press for debugging
  */
-const updateRelease = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  polyphonicSynth.updateRelease(parseFloat(target.value));
+const handleButtonPress = (buttonName: string) => {
+  console.log(`Button pressed: ${buttonName}`);
+  lastButtonPress.value = buttonName;
+  buttonPressCount.value++;
 };
 
 /**
- * Update harmonicity parameter
+ * Handle button release for debugging
  */
-const updateHarmonicity = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  polyphonicSynth.updateHarmonicity(parseFloat(target.value));
+const handleButtonRelease = (buttonName: string) => {
+  console.log(`Button released: ${buttonName}`);
 };
 
 /**
- * Update modulation index parameter
+ * Play a chord with debug logging
  */
-const updateModulationIndex = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  polyphonicSynth.updateModulationIndex(parseFloat(target.value));
+const playChordWithDebug = (notes: string[]) => {
+  console.log(`Playing chord with debug: ${notes.join(', ')}`);
+  console.log('Synth ready:', isInitialized.value);
+  
+  if (!isInitialized.value) {
+    console.error('Synth not initialized, cannot play chord');
+    return;
+  }
+
+  try {
+    notes.forEach((note, index) => {
+      console.log(`Triggering note ${note} with delay ${index * 50}ms`);
+      setTimeout(() => {
+        polyphonicSynth.triggerNote(note, 2.0, 0.6);
+        console.log(`Note ${note} triggered successfully`);
+      }, index * 50);
+    });
+  } catch (err) {
+    console.error('Error playing chord:', err);
+  }
 };
 
 /**
- * Update oscillator type
+ * Play an arpeggio with debug logging
  */
-const updateOscillatorType = (event: Event) => {
-  const target = event.target as HTMLSelectElement;
-  polyphonicSynth.updateOscillatorType(target.value as any);
-};
-
-/**
- * Update master volume
- */
-const updateMasterVolume = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  polyphonicSynth.updateMasterVolume(parseFloat(target.value));
-};
-
-/**
- * Update reverb amount
- */
-const updateReverb = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  polyphonicSynth.updateReverbAmount(parseFloat(target.value));
-};
-
-/**
- * Update voice spread
- */
-const updateVoiceSpread = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  polyphonicSynth.updateVoiceSpread(parseFloat(target.value));
-};
-
-/**
- * Play a chord (multiple notes simultaneously)
- */
-const playChord = (notes: string[]) => {
-  notes.forEach((note, index) => {
-    // Slight delay to demonstrate polyphony
-    setTimeout(() => {
-      polyphonicSynth.triggerNote(note, 2.0, 0.6);
-    }, index * 50);
-  });
-};
-
-/**
- * Play an arpeggio (sequential notes)
- */
-const playArpeggio = () => {
+const playArpeggioWithDebug = () => {
   const notes = ['C4', 'E4', 'G4', 'C5', 'G4', 'E4'];
-  notes.forEach((note, index) => {
-    setTimeout(() => {
-      polyphonicSynth.triggerNote(note, 0.8, 0.7);
-    }, index * 200);
-  });
+  console.log(`Playing arpeggio with debug: ${notes.join(', ')}`);
+  
+  if (!isInitialized.value) {
+    console.error('Synth not initialized, cannot play arpeggio');
+    return;
+  }
+
+  try {
+    notes.forEach((note, index) => {
+      setTimeout(() => {
+        console.log(`Arpeggio note ${note} at ${index * 200}ms`);
+        polyphonicSynth.triggerNote(note, 0.8, 0.7);
+      }, index * 200);
+    });
+  } catch (err) {
+    console.error('Error playing arpeggio:', err);
+  }
 };
 
 /**
- * Play polyphonic test (many simultaneous voices)
+ * Play polyphonic test with debug logging
  */
-const playPolyphonicTest = () => {
+const playPolyphonicTestWithDebug = () => {
   const notes = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'];
-  notes.forEach((note, index) => {
-    setTimeout(() => {
-      polyphonicSynth.triggerNote(note, 3.0, 0.5);
-    }, index * 100);
-  });
+  console.log(`Playing polyphonic test with debug: ${notes.join(', ')}`);
+  
+  if (!isInitialized.value) {
+    console.error('Synth not initialized, cannot play polyphonic test');
+    return;
+  }
+
+  try {
+    notes.forEach((note, index) => {
+      setTimeout(() => {
+        console.log(`Polyphonic test note ${note} at ${index * 100}ms`);
+        polyphonicSynth.triggerNote(note, 3.0, 0.5);
+      }, index * 100);
+    });
+  } catch (err) {
+    console.error('Error playing polyphonic test:', err);
+  }
 };
 
 /**
- * Stop all voices
+ * Play test note with debug logging
  */
-const stopAllVoices = () => {
-  polyphonicSynth.stopAllVoices();
+const playTestNoteWithDebug = (note: string) => {
+  console.log(`Playing test note with debug: ${note}`);
+  
+  if (!isInitialized.value) {
+    console.error('Synth not initialized, cannot play test note');
+    return;
+  }
+
+  try {
+    polyphonicSynth.triggerNote(note, 1.0, 0.8);
+    console.log(`Test note ${note} triggered successfully`);
+  } catch (err) {
+    console.error('Error playing test note:', err);
+  }
+};
+
+/**
+ * Stop all voices with debug logging
+ */
+const stopAllVoicesWithDebug = () => {
+  console.log('Stopping all voices with debug...');
+  try {
+    polyphonicSynth.stopAllVoices();
+    console.log('All voices stopped successfully');
+  } catch (err) {
+    console.error('Error stopping voices:', err);
+  }
 };
 
 /**
@@ -510,6 +401,11 @@ const stopAllVoices = () => {
 const clearError = () => {
   polyphonicSynth.clearError();
 };
+
+// Make debug function available globally
+if (typeof window !== 'undefined') {
+  (window as any).debugPolyphonicSynth = debugPolyphonicSynth;
+}
 </script>
 
 <style scoped>
